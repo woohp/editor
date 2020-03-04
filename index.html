@@ -37,10 +37,6 @@
         <div>
             <h3>Set Language</h3>
             <select id="languages">
-                <option value="c">C</option>
-                <option value="javascript">Javascript</option>
-                <option value="plaintext" selected>Plain Text</option>
-                <option value="python">Python</option>
             </select>
 
             <h3>Peers</h3>
@@ -97,6 +93,12 @@
         // create the editor
         require.config({ paths: { 'vs': 'monaco-editor/min/vs' }});
         require(['vs/editor/editor.main'], function() {
+
+            // populate langauges list
+            document.querySelector('#languages').innerHTML = monaco.languages.getLanguages().map(lang =>
+                `<option value="${ lang.id }">${ lang.aliases[0] }<\/option>`
+            ).join('');
+
             editor = monaco.editor.create(document.getElementById('editor'), {
                 value: '',
                 language: 'plaintext'
@@ -114,7 +116,7 @@
                 console.log('change:', event);
                 if (!trackingChanges)
                     return;
-                sendData({type: 'edits', value: event.changes});
+                broadcast({type: 'edits', value: event.changes});
             });
         });
     }, false);
@@ -177,14 +179,14 @@
             console.error('peer error:', err);
         });
 
-        sendData({type: 'greet', value: name});
+        peer.send(JSON.stringify({type: 'greet', value: name}));
         const existingValue = editorModel.getValue();
         if (existingValue.length > 0)
-            sendData({type: 'state', value: existingValue});
+            peer.send(JSON.stringify({type: 'state', value: existingValue}));
     }
 
-    function sendData(data) {
-        console.log('connections:', connections);
+    function broadcast(data) {
+        console.log('broadcasting to:', connections);
         const data_ = JSON.stringify(data);
         for (let peerId in connections) {
             const peer = connections[peerId];
