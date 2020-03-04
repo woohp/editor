@@ -63,6 +63,8 @@
     let discovery = null;
     const peerId = makeId();
     let connections = {};
+    let name = null;
+    let connectionNames = {};
     let editor = null;
     let editorModel = null;
     let trackingChanges = true;
@@ -70,9 +72,10 @@
     console.log('peerId:', peerId);
 
     function updatePeersDisplay() {
-        const frags = [];
-        for (const peerId in connections) {
-            frags.push(`<li>${ peerId }</li>`);
+        const frags = [`<li>${ name }<\/li>`];
+        for (const peerId in connectionNames) {
+            const name = connectionNames[peerId];
+            frags.push(`<li>${ name }<\/li>`);
         }
         document.querySelector('#peers').innerHTML = frags.join('');
     }
@@ -84,11 +87,14 @@
         const urlParams = new URLSearchParams(window.location.search);
         const roomId = urlParams.get('room');
 
-        if (roomId)
-            joinRoom(roomId);
-        else
+        if (!roomId) {
             newButton.style.display = 'block';
+            return;
+        }
 
+        joinRoom(roomId);
+
+        // create the editor
         require.config({ paths: { 'vs': 'monaco-editor/min/vs' }});
         require(['vs/editor/editor.main'], function() {
             editor = monaco.editor.create(document.getElementById('editor'), {
@@ -108,7 +114,7 @@
                 console.log('change:', event);
                 if (!trackingChanges)
                     return;
-                sendData(event.changes);
+                sendData({type: 'edits', value: event.changes});
             });
         });
     }, false);
@@ -125,6 +131,13 @@
     }
 
     function joinRoom(roomId) {
+        const cachedName = localStorage.getItem('editor-name');
+        if (cachedName == null)
+            name = prompt('Your name is...');
+        else
+            name = prompt('Your name is...', cachedName);
+        localStorage.setItem('editor-name', name);
+
         discovery = new Discovery({
             infoHash: roomId,
             peerId: peerId,
@@ -135,19 +148,27 @@
         discovery.on('error', console.error);
         discovery.on('peer', (peer, _source) => {
             console.log('peer:', peer);
-            if (peer.id.length === 40 && !connections.hasOwnProperty(peer.id)) {
-                connections[peer.id] = peer;
-                updatePeersDisplay();
+            if (peer.id.length !== 40 || connections.hasOwnProperty(peer.id))
+                return;
+
+            peer.on('connect', () => {
+                console.log('readyState', peer._channel.readyState);
                 setupConnection(peer);
-            }
+                updatePeersDisplay();
+            });
         });
     }
 
     function setupConnection(peer) {
-        peer.on('data', receiveData);
+        const peerId = peer.id
+        connections[peerId] = peer;
+        // connectionNames[peerId] = peerId;
+
+        peer.on('data', receiveData.bind(this, peerId));
         peer.on('close', () => {
             console.log('peer closed:', peer.id);
             delete connections[peer.id];
+            delete connectionNames[peer.id];
             updatePeersDisplay();
         });
         peer.on('error', err => {
@@ -155,6 +176,11 @@
                 return;
             console.error('peer error:', err);
         });
+
+        sendData({type: 'greet', value: name});
+        const existingValue = editorModel.getValue();
+        if (existingValue.length > 0)
+            sendData({type: 'state', value: existingValue});
     }
 
     function sendData(data) {
@@ -162,20 +188,35 @@
         const data_ = JSON.stringify(data);
         for (let peerId in connections) {
             const peer = connections[peerId];
-            peer.send(data_);
+            try {
+                peer.send(data_);
+            } catch {
+            }
         }
     }
 
-    function receiveData(data) {
+    function receiveData(peerId, data) {
         data = JSON.parse(new TextDecoder('utf-8').decode(data));
         console.log('incoming:', data);
-        for (let datum of data)
-            datum.forceMoveMarkers = true;
 
-        trackingChanges = false;
-        editorModel.pushEditOperations([], data);
-        trackingChanges = true;
-        console.log('incoming done');
+        if (data.type === 'edits') {
+            const edits = data.value;
+            for (let edit of edits)
+                edit.forceMoveMarkers = true;
+
+            trackingChanges = false;
+            editorModel.pushEditOperations([], edits);
+            trackingChanges = true;
+            console.log('incoming done');
+        } else if (data.type === 'greet') {
+            const value = data.value;
+            connectionNames[peerId] = value;
+            updatePeersDisplay();
+        } else if (data.type === 'state') {
+            trackingChanges = false;
+            editorModel.setValue(data.value);
+            trackingChanges = true;
+        }
     }
 
 })();
