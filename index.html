@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Editor</title>
+    <meta charset="utf-8"/>
+
+    <link rel="stylesheet" href="normalize.css">
+
+    <script src="bundle.js"></script>
+    <script src="monaco-editor/min/vs/loader.js"></script>
+
+    <style>
+        #new-room, .container {
+            display: none;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: auto 200px;
+            height: 100vh;
+        }
+
+        #peers {
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+
+    <button id="new-room">New</button>
+
+    <div class="container">
+        <div id="editor"></div>
+
+        <div>
+            <h3>Set Language</h3>
+            <select id="languages">
+                <option value="c">C</option>
+                <option value="javascript">Javascript</option>
+                <option value="plaintext" selected>Plain Text</option>
+                <option value="python">Python</option>
+            </select>
+
+            <h3>Peers</h3>
+            <ul id="peers"></ul>
+        </div>
+    </div>
+
+<script>
+(function() {
+
+    // generate a random sequence of characters
+    function makeId() {
+        let result = [];
+        const characters = '0123456789abcdef';
+        for (let i = 0; i < 40; i++)
+            result.push(characters[Math.floor(Math.random() * characters.length)]);
+        return result.join('');
+    }
+
+    let discovery = null;
+    const peerId = makeId();
+    let connections = {};
+    let editor = null;
+    let editorModel = null;
+    let trackingChanges = true;
+
+    console.log('peerId:', peerId);
+
+    function updatePeersDisplay() {
+        const frags = [];
+        for (const peerId in connections) {
+            frags.push(`<li>${ peerId }</li>`);
+        }
+        document.querySelector('#peers').innerHTML = frags.join('');
+    }
+
+    window.addEventListener('load', async function() {
+        const newButton = document.querySelector('#new-room');
+        newButton.addEventListener('click', createRoom, false);
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const roomId = urlParams.get('room');
+
+        if (roomId)
+            joinRoom(roomId);
+        else
+            newButton.style.display = 'block';
+
+        require.config({ paths: { 'vs': 'monaco-editor/min/vs' }});
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: '',
+                language: 'plaintext'
+            });
+            console.log('editor:', editor);
+
+            editorModel = editor.getModel();
+            const languagesSelect = document.querySelector('#languages');
+            languagesSelect.addEventListener('change', (event) => {
+                monaco.editor.setModelLanguage(editorModel, languagesSelect.value);
+            });
+            console.log('model:', editorModel);
+
+            editorModel.onDidChangeContent(event => {
+                console.log('change:', event);
+                if (!trackingChanges)
+                    return;
+                sendData(event.changes);
+            });
+        });
+    }, false);
+
+    window.addEventListener('beforeunload', function() {
+        for (let peerId in connections) {
+            const peer = connections[peerId];
+            peer.destroy();
+        }
+    });
+
+    function createRoom() {
+        window.location.href = window.location.pathname + '?room=' + makeId();
+    }
+
+    function joinRoom(roomId) {
+        discovery = new Discovery({
+            infoHash: roomId,
+            peerId: peerId,
+            announce: ['wss://tracker.openwebtorrent.com'],
+        });
+        console.log('discovery:', discovery);
+        discovery.on('warning', console.warn);
+        discovery.on('error', console.error);
+        discovery.on('peer', (peer, _source) => {
+            console.log('peer:', peer);
+            if (peer.id.length === 40 && !connections.hasOwnProperty(peer.id)) {
+                connections[peer.id] = peer;
+                updatePeersDisplay();
+                setupConnection(peer);
+            }
+        });
+    }
+
+    function setupConnection(peer) {
+        peer.on('data', receiveData);
+        peer.on('close', () => {
+            console.log('peer closed:', peer.id);
+            delete connections[peer.id];
+            updatePeersDisplay();
+        });
+        peer.on('error', err => {
+            if (!connections.hasOwnProperty(peer.id))
+                return;
+            console.error('peer error:', err);
+        });
+    }
+
+    function sendData(data) {
+        console.log('connections:', connections);
+        const data_ = JSON.stringify(data);
+        for (let peerId in connections) {
+            const peer = connections[peerId];
+            peer.send(data_);
+        }
+    }
+
+    function receiveData(data) {
+        data = JSON.parse(new TextDecoder('utf-8').decode(data));
+        console.log('incoming:', data);
+        for (let datum of data)
+            datum.forceMoveMarkers = true;
+
+        trackingChanges = false;
+        editorModel.pushEditOperations([], data);
+        trackingChanges = true;
+        console.log('incoming done');
+    }
+
+})();
+
+</script>
+</body>
+</html>
