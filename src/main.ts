@@ -3,7 +3,7 @@ import * as monaco from 'monaco-editor';
 
 // generate a random sequence of characters
 function makeId() {
-    let result = [];
+    const result = [];
     const characters = '0123456789abcdef';
     for (let i = 0; i < 40; i++)
         result.push(characters[Math.floor(Math.random() * characters.length)]);
@@ -118,7 +118,7 @@ function receiveData(peerId: string, data_: Uint8Array) {
 
     if (data.type === 'edits') {
         const edits = data.value;
-        for (let edit of edits)
+        for (const edit of edits)
             edit.forceMoveMarkers = true;
 
         trackingChanges = false;
@@ -185,7 +185,7 @@ export default () => {
     });
 
     window.addEventListener('beforeunload', function() {
-        for (let peer of connections.values())
+        for (const peer of connections.values())
             peer.conn.destroy();
     });
 
