@@ -139,6 +139,7 @@
         else
             name = prompt('Your name is...', cachedName);
         localStorage.setItem('editor-name', name);
+        updatePeersDisplay();
 
         discovery = new Discovery({
             infoHash: roomId,

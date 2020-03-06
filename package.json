@@ -7,7 +7,9 @@
     "monaco-editor": "^0.20.0",
     "torrent-discovery": "^9.2.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "terser": "^4.6.6"
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
