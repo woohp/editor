@@ -140,22 +140,20 @@ function receiveData(peerId: string, data_: Uint8Array) {
 
 export default () => {
 
-    console.log('main');
-
-    const newButton = document.querySelector('#new-room') as HTMLButtonElement;
-    newButton.addEventListener('click', createRoom, false);
-
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room');
 
     if (!roomId) {
+        const newButton = document.querySelector('#new-room') as HTMLButtonElement;
+        newButton.addEventListener('click', createRoom, false);
         newButton.style.display = 'block';
         return;
+    } else {
+        const container = document.querySelector('.container') as HTMLDivElement;
+        container.style.display = 'grid';
     }
 
     joinRoom(roomId);
-
-    // create the editor
 
     // populate langauges list
     document.querySelector('#languages')!.innerHTML = monaco.languages.getLanguages()
@@ -169,6 +167,8 @@ export default () => {
         language: 'plaintext'
     });
     console.log('editor:', editor);
+
+    // create the editor
 
     editorModel = editor.getModel();
     const languagesSelect = document.querySelector('#languages') as HTMLSelectElement;

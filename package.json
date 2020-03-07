@@ -6,6 +6,7 @@
     "cssnano": "^4.1.10",
     "monaco-editor": "^0.20.0",
     "parcel-bundler": "^1.12.4",
+    "parcel-plugin-compress": "^1.1.0",
     "torrent-discovery": "^9.2.1",
     "typescript": "^3.8.3"
   },
