@@ -1,4 +1,3 @@
-import Discovery from 'torrent-discovery';
 import * as monaco from 'monaco-editor';
 
 // generate a random sequence of characters
@@ -47,7 +46,7 @@ function createRoom() {
     window.location.href = window.location.pathname + '?room=' + makeId();
 }
 
-function joinRoom(roomId: string) {
+async function joinRoom(roomId: string) {
     const cachedName = localStorage.getItem('editor-name');
     if (cachedName == null)
         name = prompt('Your name is...');
@@ -58,6 +57,7 @@ function joinRoom(roomId: string) {
     localStorage.setItem('editor-name', name);
     updatePeersDisplay();
 
+    const Discovery = await import('torrent-discovery');
     const discovery = new Discovery({
         infoHash: roomId,
         peerId: peerId,
@@ -138,7 +138,7 @@ function receiveData(peerId: string, data_: Uint8Array) {
     }
 }
 
-export default () => {
+export default async () => {
 
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room');
@@ -154,6 +154,8 @@ export default () => {
     }
 
     joinRoom(roomId);
+
+    const monaco = await import('monaco-editor');
 
     // populate langauges list
     document.querySelector('#languages')!.innerHTML = monaco.languages.getLanguages()
