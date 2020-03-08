@@ -33,6 +33,7 @@ const connections: Map<string, Peer> = new Map();
 let name: string|null = null;
 let editor: monaco.editor.ICodeEditor|null = null;
 let editorModel: monaco.editor.ITextModel|null = null;
+const languagesSelect = document.querySelector('select#languages') as HTMLSelectElement;
 let trackingChanges = true;
 
 console.log('peerId:', peerId);
@@ -106,7 +107,7 @@ function setupConnection(peer: SimplePeer) {
     peer.send(JSON.stringify({type: 'greet', value: name}));
     const existingValue = editorModel!.getValue();
     if (existingValue.length > 0)
-        peer.send(JSON.stringify({type: 'state', value: existingValue}));
+        peer.send(JSON.stringify({type: 'state', value: existingValue, language: languagesSelect.value}));
     const cursorPosition = editor?.getPosition();
     if (cursorPosition != null)
         peer.send(JSON.stringify({type: 'cursor', value: cursorPosition}));
@@ -135,7 +136,7 @@ async function updatePeerCursor(peer: Peer) {
     );
 }
 
-function receiveData(peerId: string, data_: Uint8Array) {
+async function receiveData(peerId: string, data_: Uint8Array) {
     const data = JSON.parse(new TextDecoder('utf-8').decode(data_));
     console.log('incoming:', data);
     const peer = connections.get(peerId);
@@ -145,26 +146,30 @@ function receiveData(peerId: string, data_: Uint8Array) {
     if (editorModel == null)
         return;
 
+    const monaco = await import('monaco-editor');
+
+    trackingChanges = false;
     if (data.type === 'edits') {
         const edits = data.value;
         for (let edit of edits)
             edit.forceMoveMarkers = true;
-
-        trackingChanges = false;
         editorModel.pushEditOperations([], edits, () => null);
-        trackingChanges = true;
         console.log('incoming done');
     } else if (data.type === 'greet') {
         peer.displayName = data.value;
         updatePeersDisplay();
     } else if (data.type === 'state') {
-        trackingChanges = false;
         editorModel.setValue(data.value);
-        trackingChanges = true;
+        languagesSelect.value = data.language;
+        monaco.editor.setModelLanguage(editorModel!, data.language);
     } else if (data.type === 'cursor') {
         peer.position = data.value;
         updatePeerCursor(peer);
+    } else if (data.type === 'changeLanguage') {
+        languagesSelect.value = data.value;
+        monaco.editor.setModelLanguage(editorModel!, data.value);
     }
+    trackingChanges = true;
 }
 
 export default async () => {
@@ -184,30 +189,18 @@ export default async () => {
 
     joinRoom(roomId);
 
+    // create the editor and editor model
     const monaco = await import('monaco-editor');
-
-    // populate langauges list
-    document.querySelector('#languages')!.innerHTML = monaco.languages.getLanguages()
-        .filter(lang => lang.aliases !== undefined)
-        .map(lang => {
-            return `<option value="${ lang.id }">${ lang.aliases![0] }<\/option>`;
-        }).join('');
-
-    editor = monaco.editor.create(document.getElementById('editor') as HTMLDivElement, {
+    const editorConfig = {
         value: '',
-        language: 'plaintext'
-    });
+        language: 'plaintext',
+    };
+    editor = monaco.editor.create(document.getElementById('editor') as HTMLDivElement, editorConfig);
     console.log('editor:', editor);
-
-    // create the editor
-
     editorModel = editor.getModel();
-    const languagesSelect = document.querySelector('#languages') as HTMLSelectElement;
-    languagesSelect.addEventListener('change', (event) => {
-        monaco.editor.setModelLanguage(editorModel!, languagesSelect.value);
-    });
     console.log('model:', editorModel);
 
+    // listen to events on the editor
     editorModel!.onDidChangeContent(event => {
         console.log('changeContent:', event);
         if (!trackingChanges)
@@ -217,6 +210,17 @@ export default async () => {
     editor!.onDidChangeCursorPosition(event => {
         console.log('changeCursor:', event);
         broadcast({type: 'cursor', value: event.position});
+    });
+
+    // populate langauges list
+    languagesSelect.innerHTML = monaco.languages.getLanguages()
+        .filter(lang => lang.aliases !== undefined)
+        .map(lang => {
+            return `<option value="${ lang.id }">${ lang.aliases![0] }<\/option>`;
+        }).join('');
+    languagesSelect.addEventListener('change', (event) => {
+        monaco.editor.setModelLanguage(editorModel!, languagesSelect.value);
+        broadcast({type: 'changeLanguage', value: languagesSelect.value});
     });
 
     window.addEventListener('beforeunload', function() {
