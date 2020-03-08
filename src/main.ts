@@ -183,7 +183,7 @@ export default async () => {
         newButton.style.display = 'block';
         return;
     } else {
-        const container = document.querySelector('.container') as HTMLDivElement;
+        const container = document.querySelector('#container') as HTMLDivElement;
         container.style.display = 'grid';
     }
 
@@ -217,7 +217,8 @@ export default async () => {
         .filter(lang => lang.aliases !== undefined)
         .map(lang => {
             return `<option value="${ lang.id }">${ lang.aliases![0] }<\/option>`;
-        }).join('');
+        })
+        .join('');
     languagesSelect.addEventListener('change', (event) => {
         monaco.editor.setModelLanguage(editorModel!, languagesSelect.value);
         broadcast({type: 'changeLanguage', value: languagesSelect.value});
