@@ -65,7 +65,7 @@ async function joinRoom(roomId: string) {
     const discovery = new Discovery({
         infoHash: roomId,
         peerId: peerId,
-        announce: ['wss://tracker.openwebtorrent.com'],
+        announce: ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz', 'wss://tracker.fastcast.nz'],
     });
     console.log('discovery:', discovery);
     discovery.on('warning', console.warn);
