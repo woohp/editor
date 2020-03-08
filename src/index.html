@@ -6,26 +6,7 @@
     <meta charset="utf-8"/>
 
     <link rel="stylesheet" href="normalize.css">
-
-    <style>
-        #new-room, .container {
-            display: none;
-        }
-
-        .container {
-            grid-template-columns: auto 200px;
-            height: 100vh;
-        }
-
-        #peers {
-            overflow: hidden;
-        }
-
-        .peer-cursor {
-            background: #2D68C4;
-            width: 2px !important;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
@@ -35,10 +16,9 @@
     <div class="container">
         <div id="editor"></div>
 
-        <div>
-            <h3>Set Language</h3>
-            <select id="languages">
-            </select>
+        <div id="right-bar">
+            <h3>Language</h3>
+            <select id="languages"></select>
 
             <h3>Peers</h3>
             <ul id="peers"></ul>

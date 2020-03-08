@@ -56,8 +56,8 @@ async function joinRoom(roomId: string) {
         name = prompt('Your name is...');
     else
         name = prompt('Your name is...', cachedName);
-    if (name == null)
-        return;
+    if (name == null || name === '')
+        name = `Peer ${ peerId.slice(0, 8) }`;
     localStorage.setItem('editor-name', name);
     updatePeersDisplay();
 
