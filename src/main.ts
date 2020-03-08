@@ -12,23 +12,26 @@ function makeId() {
 interface SimplePeer {
     id: string;
 
-    on(eventName: 'connect', cb: () => any): any;
-    on(eventName: 'data', cb: (data: Uint8Array) => any): any;
-    on(eventName: 'close', cb: () => any): any;
-    on(eventName: 'error', cb: (err: any) => any): any;
+    on(eventName: 'connect', cb: () => any): void;
+    on(eventName: 'data', cb: (data: Uint8Array) => any): void;
+    on(eventName: 'close', cb: () => any): void;
+    on(eventName: 'error', cb: (err: any) => any): void;
 
-    send(data: string): any;
-    destroy(): any;
+    send(data: string): void;
+    destroy(): void;
 }
 
 interface Peer {
     displayName: string;
     conn: SimplePeer;
+    position: {lineNumber: number, column: number};
+    positionDecorations: string[]
 }
 
 const peerId = makeId();
 const connections: Map<string, Peer> = new Map();
 let name: string|null = null;
+let editor: monaco.editor.ICodeEditor|null = null;
 let editorModel: monaco.editor.ITextModel|null = null;
 let trackingChanges = true;
 
@@ -81,12 +84,17 @@ async function joinRoom(roomId: string) {
 
 function setupConnection(peer: SimplePeer) {
     const peerId = peer.id
-    connections.set(peerId, {displayName: '', conn: peer});
+    const defaultPosition = {lineNumber: 1, column: 1};
+    connections.set(peerId, {displayName: '', conn: peer, position: defaultPosition, positionDecorations: []});
 
     peer.on('data', (data) => receiveData(peerId, data));
     peer.on('close', () => {
         console.log('peer closed:', peer.id);
-        connections.delete(peer.id);
+        const peerObject = connections.get(peer.id);
+        if (peerObject) {
+            editor?.deltaDecorations(peerObject.positionDecorations, []);
+            connections.delete(peer.id);
+        }
         updatePeersDisplay();
     });
     peer.on('error', (err: any) => {
@@ -99,6 +107,9 @@ function setupConnection(peer: SimplePeer) {
     const existingValue = editorModel!.getValue();
     if (existingValue.length > 0)
         peer.send(JSON.stringify({type: 'state', value: existingValue}));
+    const cursorPosition = editor?.getPosition();
+    if (cursorPosition != null)
+        peer.send(JSON.stringify({type: 'cursor', value: cursorPosition}));
 }
 
 function broadcast(data: any) {
@@ -112,29 +123,47 @@ function broadcast(data: any) {
     }
 }
 
+async function updatePeerCursor(peer: Peer) {
+    const monaco = await import('monaco-editor');
+
+    console.log('new peer position:', peer.position);
+    peer.positionDecorations = editor!.deltaDecorations(
+        peer.positionDecorations, [{
+            range: new monaco.Range(peer.position.lineNumber, peer.position.column, peer.position.lineNumber, peer.position.column),
+            options: { className: 'peer-cursor' }
+        }]
+    );
+}
+
 function receiveData(peerId: string, data_: Uint8Array) {
     const data = JSON.parse(new TextDecoder('utf-8').decode(data_));
     console.log('incoming:', data);
+    const peer = connections.get(peerId);
+
+    if (peer == null)
+        return;
+    if (editorModel == null)
+        return;
 
     if (data.type === 'edits') {
         const edits = data.value;
-        for (const edit of edits)
+        for (let edit of edits)
             edit.forceMoveMarkers = true;
 
         trackingChanges = false;
-        editorModel!.pushEditOperations([], edits, () => null);
+        editorModel.pushEditOperations([], edits, () => null);
         trackingChanges = true;
         console.log('incoming done');
     } else if (data.type === 'greet') {
-        const value = data.value;
-        const peer = connections.get(peerId);
-        if (peer != null)
-            peer.displayName = value;
+        peer.displayName = data.value;
         updatePeersDisplay();
     } else if (data.type === 'state') {
         trackingChanges = false;
-        editorModel!.setValue(data.value);
+        editorModel.setValue(data.value);
         trackingChanges = true;
+    } else if (data.type === 'cursor') {
+        peer.position = data.value;
+        updatePeerCursor(peer);
     }
 }
 
@@ -164,7 +193,7 @@ export default async () => {
             return `<option value="${ lang.id }">${ lang.aliases![0] }<\/option>`;
         }).join('');
 
-    const editor = monaco.editor.create(document.getElementById('editor') as HTMLDivElement, {
+    editor = monaco.editor.create(document.getElementById('editor') as HTMLDivElement, {
         value: '',
         language: 'plaintext'
     });
@@ -180,10 +209,14 @@ export default async () => {
     console.log('model:', editorModel);
 
     editorModel!.onDidChangeContent(event => {
-        console.log('change:', event);
+        console.log('changeContent:', event);
         if (!trackingChanges)
             return;
         broadcast({type: 'edits', value: event.changes});
+    });
+    editor!.onDidChangeCursorPosition(event => {
+        console.log('changeCursor:', event);
+        broadcast({type: 'cursor', value: event.position});
     });
 
     window.addEventListener('beforeunload', function() {
