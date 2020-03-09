@@ -71,6 +71,7 @@ interface SelectionMessage {
 type Message = EditsMessage | GreetMessage | StateMessage | ChangeLanguageMessage | CursorMessage | SelectionMessage;
 
 const peerId = makeId();
+let tracker: any = null;
 const connections: Map<string, Peer> = new Map();
 let name: string|null = null;
 let editor: monaco.editor.ICodeEditor|null = null;
@@ -103,16 +104,17 @@ async function joinRoom(roomId: string) {
     localStorage.setItem('editor-name', name);
     updatePeersDisplay();
 
-    const Discovery = await import('torrent-discovery');
-    const discovery = new Discovery({
+    const Tracker = await import('bittorrent-tracker');
+    tracker = new Tracker({
         infoHash: roomId,
         peerId: peerId,
         announce: ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz', 'wss://tracker.fastcast.nz'],
     });
-    console.debug('discovery:', discovery);
-    discovery.on('warning', console.warn);
-    discovery.on('error', console.error);
-    discovery.on('peer', (peer: SimplePeer, _source: string) => {
+    console.debug('tracker:', tracker);
+    tracker.setInterval(15 * 60 * 1000);  // every 15 minutes
+    tracker.on('warning', console.warn);
+    tracker.on('error', console.error);
+    tracker.on('peer', (peer: SimplePeer) => {
         console.debug('peer:', peer);
         const peerId = peer.id;
         if (peerId.length !== 40 || connections.has(peerId))
@@ -123,6 +125,7 @@ async function joinRoom(roomId: string) {
             updatePeersDisplay();
         });
     });
+    tracker.start();
 }
 
 function setupConnection(peer: SimplePeer) {
@@ -312,6 +315,7 @@ export default async () => {
     window.addEventListener('beforeunload', function() {
         for (const peer of connections.values())
             peer.conn.destroy();
+        tracker.stop();
     });
 
 }
