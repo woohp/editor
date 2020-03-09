@@ -21,6 +21,10 @@ body {
 }
 
 .peer-cursor {
-    background: #2D68C4;
+    background: #ff6961;
     width: 2px !important;
+}
+
+.peer-selection {
+    background-color: #ff9994;
 }

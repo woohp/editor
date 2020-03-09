@@ -25,7 +25,14 @@ interface Peer {
     displayName: string;
     conn: SimplePeer;
     position: {lineNumber: number, column: number};
-    positionDecorations: string[]
+    positionDecorations: string[];
+    selection: {
+        selectionStartLineNumber: number;
+        selectionStartColumn: number;
+        positionLineNumber: number;
+        positionColumn: number;
+    }
+    selectionDecorations: string[];
 }
 
 const peerId = makeId();
@@ -36,7 +43,7 @@ let editorModel: monaco.editor.ITextModel|null = null;
 const languagesSelect = document.querySelector('select#languages') as HTMLSelectElement;
 let trackingChanges = true;
 
-console.log('peerId:', peerId);
+console.info('peerId:', peerId);
 
 function updatePeersDisplay() {
     const frags = [`<li>${ name }<\/li>`];
@@ -67,11 +74,11 @@ async function joinRoom(roomId: string) {
         peerId: peerId,
         announce: ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz', 'wss://tracker.fastcast.nz'],
     });
-    console.log('discovery:', discovery);
+    console.debug('discovery:', discovery);
     discovery.on('warning', console.warn);
     discovery.on('error', console.error);
     discovery.on('peer', (peer: SimplePeer, _source: string) => {
-        console.log('peer:', peer);
+        console.debug('peer:', peer);
         const peerId = peer.id;
         if (peerId.length !== 40 || connections.has(peerId))
             return;
@@ -86,11 +93,24 @@ async function joinRoom(roomId: string) {
 function setupConnection(peer: SimplePeer) {
     const peerId = peer.id
     const defaultPosition = {lineNumber: 1, column: 1};
-    connections.set(peerId, {displayName: '', conn: peer, position: defaultPosition, positionDecorations: []});
+    const defaultSelection = {
+        selectionStartLineNumber: 0,
+        selectionStartColumn: 0,
+        positionLineNumber: 0,
+        positionColumn: 0,
+    };
+    connections.set(peerId, {
+        displayName: '',
+        conn: peer,
+        position: defaultPosition,
+        positionDecorations: [],
+        selection: defaultSelection,
+        selectionDecorations: [],
+    });
 
     peer.on('data', (data) => receiveData(peerId, data));
     peer.on('close', () => {
-        console.log('peer closed:', peer.id);
+        console.debug('peer closed:', peer.id);
         const peerObject = connections.get(peer.id);
         if (peerObject) {
             editor?.deltaDecorations(peerObject.positionDecorations, []);
@@ -114,7 +134,7 @@ function setupConnection(peer: SimplePeer) {
 }
 
 function broadcast(data: any) {
-    console.log('broadcasting to:', connections);
+    console.debug('broadcasting to:', connections);
     const data_ = JSON.stringify(data);
     for (const peer of connections.values()) {
         try {
@@ -127,7 +147,7 @@ function broadcast(data: any) {
 async function updatePeerCursor(peer: Peer) {
     const monaco = await import('monaco-editor');
 
-    console.log('new peer position:', peer.position);
+    console.debug('new peer position:', peer.position);
     peer.positionDecorations = editor!.deltaDecorations(
         peer.positionDecorations, [{
             range: new monaco.Range(peer.position.lineNumber, peer.position.column, peer.position.lineNumber, peer.position.column),
@@ -136,9 +156,26 @@ async function updatePeerCursor(peer: Peer) {
     );
 }
 
+async function updatePeerSelection(peer: Peer) {
+    const monaco = await import('monaco-editor');
+
+    console.debug('new peer selection:', peer.selection);
+    peer.selectionDecorations = editor!.deltaDecorations(
+        peer.selectionDecorations, [{
+            range: new monaco.Range(
+                peer.selection.selectionStartLineNumber,
+                peer.selection.selectionStartColumn,
+                peer.selection.positionLineNumber,
+                peer.selection.positionColumn,
+            ),
+            options: { className: 'peer-selection' }
+        }]
+    );
+}
+
 async function receiveData(peerId: string, data_: Uint8Array) {
     const data = JSON.parse(new TextDecoder('utf-8').decode(data_));
-    console.log('incoming:', data);
+    console.debug('incoming:', data);
     const peer = connections.get(peerId);
 
     if (peer == null)
@@ -154,7 +191,7 @@ async function receiveData(peerId: string, data_: Uint8Array) {
         for (let edit of edits)
             edit.forceMoveMarkers = true;
         editorModel.pushEditOperations([], edits, () => null);
-        console.log('incoming done');
+        console.debug('incoming done');
     } else if (data.type === 'greet') {
         peer.displayName = data.value;
         updatePeersDisplay();
@@ -168,6 +205,9 @@ async function receiveData(peerId: string, data_: Uint8Array) {
     } else if (data.type === 'changeLanguage') {
         languagesSelect.value = data.value;
         monaco.editor.setModelLanguage(editorModel!, data.value);
+    } else if (data.type === 'selection') {
+        peer.selection = data.value;
+        updatePeerSelection(peer);
     }
     trackingChanges = true;
 }
@@ -196,20 +236,24 @@ export default async () => {
         language: 'plaintext',
     };
     editor = monaco.editor.create(document.getElementById('editor') as HTMLDivElement, editorConfig);
-    console.log('editor:', editor);
+    console.debug('editor:', editor);
     editorModel = editor.getModel();
-    console.log('model:', editorModel);
+    console.debug('model:', editorModel);
 
     // listen to events on the editor
     editorModel!.onDidChangeContent(event => {
-        console.log('changeContent:', event);
+        console.debug('changeContent:', event);
         if (!trackingChanges)
             return;
         broadcast({type: 'edits', value: event.changes});
     });
     editor!.onDidChangeCursorPosition(event => {
-        console.log('changeCursor:', event);
+        console.debug('changeCursor:', event);
         broadcast({type: 'cursor', value: event.position});
+    });
+    editor!.onDidChangeCursorSelection(event => {
+        console.debug('selection:', event.selection);
+        broadcast({type: 'selection', value: event.selection});
     });
 
     // populate langauges list
