@@ -108,7 +108,7 @@ async function joinRoom(roomId: string) {
     tracker = new Tracker({
         infoHash: roomId,
         peerId: peerId,
-        announce: ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz', 'wss://tracker.fastcast.nz'],
+        announce: ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz'],
     });
     console.debug('tracker:', tracker);
     tracker.setInterval(15 * 60 * 1000);  // every 15 minutes
