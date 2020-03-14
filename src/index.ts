@@ -255,7 +255,7 @@ async function receiveData(peerId: string, data_: Uint8Array) {
     trackingChanges = true;
 }
 
-export default async () => {
+async function main () {
 
     const urlParams = new URLSearchParams(window.location.search);
     const roomId = urlParams.get('room');
@@ -319,3 +319,5 @@ export default async () => {
     });
 
 }
+
+main();
