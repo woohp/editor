@@ -9,6 +9,14 @@ function makeId() {
     return result.join('');
 }
 
+function hexToBase64(hex: string) {
+    return Buffer.from(hex, 'hex').toString('base64');
+}
+
+function base64ToHex(base64: string) {
+    return Buffer.from(base64, 'base64').toString('hex');
+}
+
 interface SimplePeer {
     id: string;
 
@@ -90,10 +98,12 @@ function updatePeersDisplay() {
 }
 
 function createRoom() {
-    window.location.href = window.location.pathname + '?room=' + makeId();
+    const newRoomId = makeId();
+    window.location.href = window.location.pathname + '?room=' + encodeURIComponent(hexToBase64(newRoomId));
 }
 
 async function joinRoom(roomId: string) {
+
     const cachedName = localStorage.getItem('editor-name');
     if (cachedName == null)
         name = prompt('Your name is...');
@@ -106,7 +116,7 @@ async function joinRoom(roomId: string) {
 
     const Tracker = await import('bittorrent-tracker');
     tracker = new Tracker({
-        infoHash: roomId,
+        infoHash: base64ToHex(roomId),
         peerId: peerId,
         announce: ['wss://tracker.openwebtorrent.com', 'wss://tracker.btorrent.xyz'],
     });
