@@ -86,6 +86,7 @@ let editor: monaco.editor.ICodeEditor|null = null;
 let editorModel: monaco.editor.ITextModel|null = null;
 const languagesSelect = document.querySelector('select#languages') as HTMLSelectElement;
 let trackingChanges = true;
+const connectedTrackers: Set<string> = new Set();
 
 console.info('peerId:', peerId);
 
@@ -123,7 +124,12 @@ async function joinRoom(roomId: string) {
     console.debug('tracker:', tracker);
     tracker.setInterval(15 * 60 * 1000);  // every 15 minutes
     tracker.on('warning', console.warn);
-    tracker.on('error', console.error);
+    tracker.on('error', (e: any) => {
+        connectedTrackers.delete(e.announce);
+        console.log('num connected trackers:', connectedTrackers.size);
+        if (connectedTrackers.size === 0)
+            document.querySelector('#connection-status')!.textContent = 'Connecting...';
+    });
     tracker.on('peer', (peer: SimplePeer) => {
         console.debug('peer:', peer);
         const peerId = peer.id;
@@ -135,6 +141,12 @@ async function joinRoom(roomId: string) {
             updatePeersDisplay();
         });
     });
+    tracker.on('update', (e: any) => {
+        connectedTrackers.add(e.announce);
+        document.querySelector('#connection-status')!.textContent = 'connected';
+        console.log('num connected trackers:', connectedTrackers.size);
+    });
+
     tracker.start();
 }
 
