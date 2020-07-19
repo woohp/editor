@@ -6,8 +6,8 @@
     "cssnano": "^4.1.10",
     "monaco-editor": "^0.20.0",
     "parcel-bundler": "^1.12.4",
-    "bittorrent-tracker": "^9.14.5",
-    "typescript": "^3.8.3"
+    "bittorrent-tracker": "^9.15.0",
+    "typescript": "^3.9.7"
   },
   "scripts": {
     "start": "parcel src/index.html --out-dir docs",
