@@ -13,7 +13,7 @@
   },
   "scripts": {
     "start": "parcel serve ./src/index.html --dist-dir docs",
-    "build": "rm -r docs; parcel build ./src/index.html --no-scope-hoist --dist-dir docs --public-url ./"
+    "build": "rm -r docs; parcel build ./src/index.html --no-scope-hoist --no-source-maps --dist-dir docs --public-url ./"
   },
   "author": "Hui Peng Hu",
   "license": "ISC",
