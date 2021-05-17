@@ -10,11 +10,15 @@ function makeId() {
 }
 
 function hexToBase64(hex: string) {
-    return Buffer.from(hex, 'hex').toString('base64');
+    let str = '';
+    for (let n = 0; n < hex.length; n += 2) {
+        str += String.fromCharCode(parseInt(hex.substr(n, 2), 16));
+    }
+    return btoa(str);
 }
 
 function base64ToHex(base64: string) {
-    return Buffer.from(base64, 'base64').toString('hex');
+    return atob(base64).split("").map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
 }
 
 interface SimplePeer {
