@@ -1,4 +1,3 @@
-import * as monaco from 'monaco-editor';
 
 // generate a random sequence of characters
 function makeId() {
