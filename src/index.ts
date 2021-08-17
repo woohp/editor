@@ -1,45 +1,28 @@
+import { Buffer } from 'buffer';
+
 // generate a random sequence of characters
 function makeId() {
-    const result = [];
-    const characters = '0123456789abcdef';
-    for (let i = 0; i < 40; i++)
-        result.push(characters[Math.floor(Math.random() * characters.length)]);
-    return result.join('');
-}
-
-function hexToBase64(hex: string) {
-    let str = '';
-    for (let n = 0; n < hex.length; n += 2) {
-        str += String.fromCharCode(parseInt(hex.substr(n, 2), 16));
-    }
-    return btoa(str);
-}
-
-function base64ToHex(base64: string) {
-    return atob(base64)
-        .split('')
-        .map((c) => c.charCodeAt(0).toString(16).padStart(2, '0'))
-        .join('');
+    const array = new Uint8Array(20);
+    return Buffer.from(window.crypto.getRandomValues(array));
 }
 
 self.MonacoEnvironment = {
-    getWorkerUrl: function(moduleId: any, label: string) {
+    getWorkerUrl: function (moduleId: any, label: string) {
         if (label === 'json') {
-          return './json.worker.js';
+            return './json.worker.js';
         }
         if (label === 'css' || label === 'scss' || label === 'less') {
-          return './css.worker.js';
+            return './css.worker.js';
         }
         if (label === 'html' || label === 'handlebars' || label === 'razor') {
-          return './html.worker.js';
+            return './html.worker.js';
         }
         if (label === 'typescript' || label === 'javascript') {
-          return './ts.worker.js';
+            return './ts.worker.js';
         }
         return './editor.worker.js';
     },
 };
-
 
 const peerId = makeId();
 
@@ -48,7 +31,7 @@ console.info('peerId:', peerId);
 function createRoom() {
     const newRoomId = makeId();
     window.location.href =
-        window.location.pathname + '?room=' + encodeURIComponent(hexToBase64(newRoomId));
+        window.location.pathname + '?room=' + encodeURIComponent(newRoomId.toString('base64'));
 }
 
 async function main() {
@@ -61,7 +44,7 @@ async function main() {
         newButton.classList.remove('hidden');
         return;
     }
-    roomId = base64ToHex(roomId);
+    roomId = Buffer.from(roomId, 'base64');
 
     const appEl = document.querySelector('#app') as HTMLDivElement;
     appEl.classList.remove('hidden');

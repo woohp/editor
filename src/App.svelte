@@ -1,4 +1,5 @@
 <script lang="ts">
+    import type { Buffer } from 'buffer';
     import { onMount } from 'svelte';
     import type * as monaco from 'monaco-editor';
     import type { Client } from 'bittorrent-tracker';
@@ -70,9 +71,9 @@
         | CursorMessage
         | SelectionMessage;
 
-    export let peerId: string;
+    export let peerId: Buffer;
+    export let roomId: Buffer;
     export let name: string;
-    export let roomId: string;
 
     let tracker: Client;
     let editor: monaco.editor.ICodeEditor;
@@ -258,6 +259,9 @@
         console.debug('editor:', editor);
         editorModel = editor.getModel()!;
         console.debug('editorModel:', editorModel);
+
+        if (window.matchMedia('(prefers-color-scheme: dark)').matches)
+            monaco.editor.setTheme('vs-dark');
 
         availableLanguages = monaco.languages
             .getLanguages()
