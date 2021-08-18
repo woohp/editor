@@ -314,19 +314,19 @@
     }
 </script>
 
-<div class="h-screen grid grid-cols-[auto,240px]">
+<div class="h-screen grid grid-cols-[auto,240px] gap-4">
     <div bind:this={editorEl} />
 
-    <div class="pl-4">
-        <h3>Language</h3>
-        <select bind:value={currentLanguage} on:change={handleLanguageSelect}>
+    <div class="font-mono">
+        <h3 class="text-2xl leading-normal">Language</h3>
+        <select bind:value={currentLanguage} on:change={handleLanguageSelect} class="border border-gray-300 py-1.5 px-3">
             {#each availableLanguages as [langId, langAlias]}
                 <option value={langId}>{langAlias}</option>
             {/each}
         </select>
 
-        <h3>Peers</h3>
-        <ul class="overflow-hidden pl-5">
+        <h3 class="text-2xl leading-normal mt-4">Peers</h3>
+        <ul class="list-disc list-inside font-mono text-sm">
             <li>{name}</li>
             {#each [...connections] as [_, peer]}
                 <li>{peer.displayName}</li>

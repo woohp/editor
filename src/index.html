@@ -10,7 +10,17 @@
 
 <body>
 
-    <button id="new-room" class="hidden py-3 px-4">New</button>
+    <div
+        id="new-room"
+        class="hidden flex justify-center pt-4">
+
+        <button
+            id="new-room"
+            class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4"
+            onclick="createRoom()"
+            >New</button>
+    </div>
+
     <div id="app" class="hidden"></div>
 
     <script type="module" src="./index.ts"></script>

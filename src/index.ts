@@ -28,23 +28,22 @@ const peerId = makeId();
 
 console.info('peerId:', peerId);
 
-function createRoom() {
+window.createRoom = function createRoom() {
     const newRoomId = makeId();
     window.location.href =
         window.location.pathname + '?room=' + encodeURIComponent(newRoomId.toString('base64'));
-}
+};
 
 async function main() {
     const urlParams = new URLSearchParams(window.location.search);
-    let roomId = urlParams.get('room');
+    let roomId_ = urlParams.get('room');
 
-    if (!roomId) {
-        const newButton = document.querySelector('#new-room') as HTMLButtonElement;
-        newButton.addEventListener('click', createRoom, false);
+    if (!roomId_) {
+        const newButton = document.querySelector('#new-room') as HTMLElement;
         newButton.classList.remove('hidden');
         return;
     }
-    roomId = Buffer.from(roomId, 'base64');
+    const roomId = Buffer.from(roomId_, 'base64');
 
     const appEl = document.querySelector('#app') as HTMLDivElement;
     appEl.classList.remove('hidden');
@@ -57,7 +56,7 @@ async function main() {
     let name: string | null;
     if (cachedName == null) name = prompt('Your name is...');
     else name = prompt('Your name is...', cachedName);
-    if (name == null || name === '') name = `Peer ${peerId.slice(0, 8)}`;
+    if (name == null || name === '') name = `Peer ${peerId.toString('hex').slice(0, 8)}`;
     localStorage.setItem('editor-name', name);
 
     const app = new App.default({
