@@ -72,7 +72,7 @@
         | SelectionMessage;
 
     export let peerId: Buffer;
-    export let roomId: Buffer;
+    export let roomId: string;
     export let name: string;
 
     let tracker: Client;
@@ -85,6 +85,7 @@
     let connections: Map<string, Peer> = new Map();
 
     let editorEl: HTMLDivElement;
+    let nameInputEl: HTMLInputElement;
     let availableLanguages: [string, string][] = [];
     let currentLanguage: string = 'plaintext';
 
@@ -131,6 +132,15 @@
         const cursorPosition = editor?.getPosition();
         if (cursorPosition != null)
             peer.send(JSON.stringify({ type: 'cursor', value: cursorPosition }));
+    }
+
+    function onChangeName() {
+        console.debug('new name:', name);
+        broadcast({ type: 'greet', value: name });
+    }
+
+    function onChangeNameKeydown(e: KeyboardEvent) {
+        if (e.key === 'Enter') (e.target as HTMLDivElement).blur();
     }
 
     async function handleLanguageSelect() {
@@ -291,9 +301,12 @@
             connectedTrackers = connectedTrackers;
         });
         tracker.on('peer', (peer: SimplePeer) => {
-            console.debug('peer:', peer);
+            console.debug('new peer:', peer);
             const peerId = peer.id;
-            if (peerId.length !== 40 || connections.has(peerId)) return;
+            if (peerId.length !== 40 || connections.has(peerId)) {
+                console.debug('here?');
+                return;
+            }
 
             peer.on('connect', () => {
                 setupConnection(peer);
@@ -319,17 +332,37 @@
 
     <div class="font-mono">
         <h3 class="text-2xl leading-normal">Language</h3>
-        <select bind:value={currentLanguage} on:change={handleLanguageSelect} class="border border-gray-300 py-1.5 px-3">
+        <select
+            bind:value={currentLanguage}
+            on:change={handleLanguageSelect}
+            class="border border-gray-300 py-1.5 px-3"
+        >
             {#each availableLanguages as [langId, langAlias]}
                 <option value={langId}>{langAlias}</option>
             {/each}
         </select>
 
         <h3 class="text-2xl leading-normal mt-4">Peers</h3>
-        <ul class="list-disc list-inside font-mono text-sm">
-            <li>{name}</li>
+        <ul class="list-inside">
+            <li class="marker:content-['-']">
+                <input
+                    class="w-[160px] ml-2"
+                    bind:this={nameInputEl}
+                    bind:value={name}
+                    on:blur={onChangeName}
+                    on:keydown={onChangeNameKeydown}
+                />
+                <span
+                    class="ml-4 cursor-pointer text-xs text-blue-500"
+                    on:click={() => nameInputEl.focus()}
+                >
+                    Edit
+                </span>
+            </li>
             {#each [...connections] as [_, peer]}
-                <li>{peer.displayName}</li>
+                <li class="marker:content-['-']">
+                    <span class="ml-2">{peer.displayName}</span>
+                </li>
             {/each}
         </ul>
 

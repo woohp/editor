@@ -1,9 +1,8 @@
 import { Buffer } from 'buffer';
 
 // generate a random sequence of characters
-function makeId() {
-    const array = new Uint8Array(20);
-    return Buffer.from(window.crypto.getRandomValues(array));
+function makeId(): Buffer {
+    return Buffer.from(window.crypto.getRandomValues(new Uint8Array(20)));
 }
 
 self.MonacoEnvironment = {
@@ -25,38 +24,40 @@ self.MonacoEnvironment = {
 };
 
 const peerId = makeId();
-
-console.info('peerId:', peerId);
-
-window.createRoom = function createRoom() {
-    const newRoomId = makeId();
-    window.location.href =
-        window.location.pathname + '?room=' + encodeURIComponent(newRoomId.toString('base64'));
-};
+console.info('peerId:', peerId.toString('hex'));
 
 async function main() {
     const urlParams = new URLSearchParams(window.location.search);
-    let roomId_ = urlParams.get('room');
+    let roomId = urlParams.get('room');
 
-    if (!roomId_) {
-        const newButton = document.querySelector('#new-room') as HTMLElement;
-        newButton.classList.remove('hidden');
+    if (!roomId) {
+        const newRoomEl = document.querySelector('#new-room') as HTMLElement;
+        newRoomEl.classList.remove('hidden');
+        newRoomEl.querySelector('a')!.href =
+            '?room=' + encodeURIComponent(makeId().toString('hex'));
         return;
     }
-    const roomId = Buffer.from(roomId_, 'base64');
+    if (roomId.length != 40) {
+        console.error('unrecognized roomId:', roomId);
+        return;
+    }
 
     const appEl = document.querySelector('#app') as HTMLDivElement;
     appEl.classList.remove('hidden');
 
     const App = await import('./App.svelte');
-    // const App = require('./App.svelte');
     console.debug('App', App);
 
     const cachedName = localStorage.getItem('editor-name');
     let name: string | null;
-    if (cachedName == null) name = prompt('Your name is...');
-    else name = prompt('Your name is...', cachedName);
-    if (name == null || name === '') name = `Peer ${peerId.toString('hex').slice(0, 8)}`;
+    if (cachedName == null) {
+        name = prompt('Your name is...');
+    } else {
+        name = cachedName;
+    }
+    if (name == null || name === '') {
+        name = `Peer ${peerId.toString('hex').slice(0, 8)}`;
+    }
     localStorage.setItem('editor-name', name);
 
     const app = new App.default({
