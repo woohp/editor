@@ -90,6 +90,10 @@
     let currentLanguage: string = 'plaintext';
 
     function setupConnection(peer: SimplePeer) {
+        if (connections.has(peer.id)) {
+            console.debug('setupConnection: already has existing peer?');
+            return;
+        }
         const peerId = peer.id;
         const defaultPosition = { lineNumber: 1, column: 1 };
         const defaultSelection = {
@@ -304,7 +308,7 @@
             console.debug('new peer:', peer);
             const peerId = peer.id;
             if (peerId.length !== 40 || connections.has(peerId)) {
-                console.debug('here?');
+                console.debug('already has existing peer?');
                 return;
             }
 
