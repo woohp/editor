@@ -92,6 +92,7 @@
     function setupConnection(peer: SimplePeer) {
         if (connections.has(peer.id)) {
             console.debug('setupConnection: already has existing peer?');
+            peer.destroy();
             return;
         }
         const peerId = peer.id;
