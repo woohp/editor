@@ -328,7 +328,7 @@
     function beforeUnload() {
         console.debug('disconnecting from trackers');
         for (const peer of connections.values()) peer.conn.destroy();
-        tracker.stop();
+        tracker?.stop();
     }
 </script>
 
