@@ -4,6 +4,7 @@
     import * as Y from 'yjs';
     import { MonacoBinding } from 'y-monaco';
     import { WebrtcProvider } from 'y-webrtc';
+    import { IndexeddbPersistence } from 'y-indexeddb';
 
     interface Changes {
         added: number[];
@@ -84,6 +85,8 @@
             }
         });
         awareness.setLocalStateField('user', {name});
+
+        new IndexeddbPersistence(roomId, ydoc);
 
         if (window.matchMedia('(prefers-color-scheme: dark)').matches)
             monaco.editor.setTheme('vs-dark');
