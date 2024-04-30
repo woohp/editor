@@ -1,12 +1,9 @@
 module.exports = {
-    content: [
-        './src/*.html', './src/*.svelte'
-    ],
+    content: ["./src/*.html", "./src/*.svelte"],
     important: true,
-    mode: 'jit',
+    mode: "jit",
     theme: {
         extend: {},
     },
     plugins: [],
-}
-
+};

@@ -1,0 +1,29 @@
+{
+  "files": {
+    "include": [
+      "src/index.ts", "src/App.svelte", "svelte.config.js", "tailwind.config.js",
+    ],
+  },
+  "javascript": {
+    "formatter": {
+      "trailingComma": "all",
+      "indentWidth": 4,
+      "indentStyle": "space",
+      "lineWidth": 120,
+    },
+  },
+  "formatter": {
+    "indentStyle": "space",
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        "useNamingConvention": {},
+        "useTemplate": {"level": "off"}
+      },
+      "correctness": {
+        "noUnusedImports": {},
+      },
+    },
+  },
+}
