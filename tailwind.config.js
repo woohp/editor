@@ -1,7 +1,5 @@
-module.exports = {
-    content: ["./src/*.html", "./src/*.svelte"],
+export default {
     important: true,
-    mode: "jit",
     theme: {
         extend: {},
     },

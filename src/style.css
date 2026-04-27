@@ -1,25 +1,23 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 .yRemoteSelection {
-    @apply bg-red-300;
+  @apply bg-red-300;
 }
 
 .yRemoteSelectionHead {
-    @apply absolute;
-    @apply border-red-400;
-    @apply border-l-2 border-y-2;
-    @apply h-full;
-    @apply box-border;
+  @apply absolute;
+  @apply border-red-400;
+  @apply border-l-2 border-y-2;
+  @apply h-full;
+  @apply box-border;
 }
 
 .yRemoteSelectionHead::after {
-    content: ' ';
-    @apply absolute;
-    @apply border-red-400;
-    @apply border-[3px];
-    border-radius: 4px;
-    left: -4px;
-    top: -5px;
+  content: " ";
+  @apply absolute;
+  @apply border-red-400;
+  @apply border-[3px];
+  border-radius: 4px;
+  left: -4px;
+  top: -5px;
 }

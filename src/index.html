@@ -1,28 +1,17 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en" class="h-full">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Editor</title>
+    </head>
+    <body class="h-full m-0">
+        <div id="new-room" class="hidden flex justify-center pt-4">
+            <a class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-4">New</a>
+        </div>
 
-<head>
-    <title>Editor</title>
-    <meta charset="utf-8"/>
+        <div id="app" class="hidden h-full"></div>
 
-    <link rel="stylesheet" href="style.css">
-</head>
-
-<body class="">
-
-    <div
-        id="new-room"
-        class="hidden flex justify-center pt-4">
-
-        <a
-            class="bg-blue-500 hover:bg-blue-700 text-white
-                   font-bold py-3 px-4"
-            >New</a>
-    </div>
-
-    <div id="app" class="hidden"></div>
-
-    <script type="module" src="./index.ts"></script>
-
-</body>
+        <script type="module" src="./index.ts"></script>
+    </body>
 </html>

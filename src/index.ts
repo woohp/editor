@@ -1,30 +1,39 @@
-import { Buffer } from "node:buffer";
+import { mount } from "svelte";
+import App from "./App.svelte";
+import "./style.css";
+import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
+import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
+import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
+import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 
 // generate a random sequence of characters
-function makeId(): Buffer {
-    return Buffer.from(window.crypto.getRandomValues(new Uint8Array(20)));
+function makeId(): string {
+    return [...window.crypto.getRandomValues(new Uint8Array(20))]
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
 }
 
-self.MonacoEnvironment = {
-    getWorkerUrl: (_workerId: string, label: string) => {
+globalThis.MonacoEnvironment = {
+    getWorker: (_workerId: string, label: string) => {
         if (label === "json") {
-            return "./json.worker.js";
+            return new JsonWorker();
         }
         if (label === "css" || label === "scss" || label === "less") {
-            return "./css.worker.js";
+            return new CssWorker();
         }
         if (label === "html" || label === "handlebars" || label === "razor") {
-            return "./html.worker.js";
+            return new HtmlWorker();
         }
         if (label === "typescript" || label === "javascript") {
-            return "./ts.worker.js";
+            return new TsWorker();
         }
-        return "./editor.worker.js";
+        return new EditorWorker();
     },
 };
 
 const peerId = makeId();
-console.info("peerId:", peerId.toString("hex"));
+console.info("peerId:", peerId);
 
 async function main() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -35,7 +44,7 @@ async function main() {
         newRoomEl.classList.remove("hidden");
         const newRoomLink = newRoomEl.querySelector("a");
         if (newRoomLink) {
-            newRoomLink.href = "?room=" + encodeURIComponent(makeId().toString("hex"));
+            newRoomLink.href = "?room=" + encodeURIComponent(makeId());
         }
         return;
     }
@@ -47,9 +56,6 @@ async function main() {
     const appEl = document.querySelector("#app") as HTMLDivElement;
     appEl.classList.remove("hidden");
 
-    const App = await import("./App.svelte");
-    console.debug("App", App);
-
     const cachedName = localStorage.getItem("editor-name");
     let name: string | null;
     if (cachedName == null) {
@@ -58,13 +64,13 @@ async function main() {
         name = cachedName;
     }
     if (name == null || name === "") {
-        name = `Peer ${peerId.toString("hex").slice(0, 8)}`;
+        name = `Peer ${peerId.slice(0, 8)}`;
     }
     localStorage.setItem("editor-name", name);
 
-    const app = new App.default({
+    mount(App, {
         target: appEl,
-        props: { peerId, roomId, name },
+        props: { roomId, name },
     });
 }
 

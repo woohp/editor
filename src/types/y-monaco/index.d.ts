@@ -1,6 +1,6 @@
-declare module 'y-monaco' {
+declare module "y-monaco" {
     export class MonacoBinding {
-        constructor(ytext, monacoEdito, editors, awareness?);
-        destroy();
+        constructor(ytext: unknown, monacoEditor: unknown, editors: unknown, awareness?: unknown);
+        destroy(): void;
     }
 }
