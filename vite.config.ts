@@ -5,6 +5,7 @@ import { defineConfig } from "vite-plus";
 export default defineConfig({
     fmt: {
         ignorePatterns: ["docs/**"],
+        tabWidth: 4,
     },
     lint: {
         ignorePatterns: ["docs/**"],
@@ -14,6 +15,7 @@ export default defineConfig({
             typeCheck: true,
         },
         rules: {
+            "no-unassigned-vars": "off",
             "vite-plus/prefer-vite-plus-imports": "error",
         },
     },
@@ -22,6 +24,9 @@ export default defineConfig({
         outDir: "../docs",
         emptyOutDir: true,
     },
-    plugins: [svelte({ configFile: new URL("./svelte.config.js", import.meta.url).pathname }), tailwindcss()],
+    plugins: [
+        svelte({ configFile: new URL("./svelte.config.js", import.meta.url).pathname }),
+        tailwindcss(),
+    ],
     root: "src",
 });

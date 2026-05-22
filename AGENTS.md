@@ -1,13 +1,15 @@
 # Repository Guide
 
 ## Commands
+
 - Use npm when installing dependencies; `package-lock.json` is the only lockfile.
 - Start the dev server with `npm run dev` or `npm run start`.
-- Run focused verification with `npm run check` for Svelte + TypeScript and `npm run lint` for Biome.
-- Build with `npm run build`; Vite writes production output to `../docs` rather than a local `dist/` directory.
-- Format with `npm run format`; this runs `biome check --write .` only over the files included by `biome.jsonc`.
+- Run focused verification with `npm run check` for Vite+ checks plus Svelte + TypeScript, and `npm run lint` for Vite+ linting.
+- Build with `npm run build`; Vite+ writes production output to `../docs` rather than a local `dist/` directory.
+- Format with `npm run format`; this runs `vp fmt --write` with config in `vite.config.ts`.
 
 ## Project Shape
+
 - This is a single-package Svelte 5 + Vite app, not a monorepo.
 - Vite root is `src`, so `src/index.html` and `src/index.ts` are the browser entrypoints.
 - `vite.config.ts` sets `base: "./"` for relative asset URLs and uses `svelte({ configFile: "../svelte.config.js" })` because the Vite root is `src`.
@@ -15,6 +17,7 @@
 - No test runner is configured; use `check`, `lint`, and `build` as the available validation steps.
 
 ## Gotchas
+
 - Do not change the build output directory casually: `README.md` points to the GitHub Pages site, and the production build targets `../docs` for that deployment shape.
 - Monaco web workers are wired explicitly in `src/index.ts` through `globalThis.MonacoEnvironment`; language-worker imports are required for editor features in Vite.
 - The only signaling server is currently `wss://signaling.yjs.dev` in `src/App.svelte`; browser-to-browser sync depends on that public service plus WebRTC.
