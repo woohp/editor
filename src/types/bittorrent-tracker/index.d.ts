@@ -3,8 +3,8 @@ declare module "bittorrent-tracker" {
 
     export class Client {
         constructor(opts: {
-            peerId: string | Buffer;
-            infoHash: string | Buffer;
+            peerId: string | Uint8Array;
+            infoHash: string | Uint8Array;
             announce: string[];
         });
 

@@ -13,18 +13,19 @@
     "svelte-check": "^4.4.6",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
-    "vite": "^8.0.10",
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
     "y-indexeddb": "^9.0.12",
     "y-monaco": "^0.1.6",
     "y-protocols": "^1.0.7",
     "y-webrtc": "^10.3.0",
-    "yjs": "^13.6.30"
+    "yjs": "^13.6.30",
+    "vite-plus": "latest"
   },
   "scripts": {
-    "dev": "vite",
-    "start": "vite",
-    "build": "vite build",
-    "preview": "vite preview",
+    "dev": "vp dev",
+    "start": "vp dev",
+    "build": "vp build",
+    "preview": "vp preview",
     "check": "svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write ."
@@ -33,5 +34,9 @@
   "license": "ISC",
   "browserslist": [
     "last 2 Chrome versions"
-  ]
+  ],
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+  }
 }

@@ -7,7 +7,8 @@
         "isolatedModules": true,
         "verbatimModuleSyntax": true,
         "noEmit": true,
-        "types": ["vite/client", "monaco-editor"],
+        "types": ["vite-plus/client", "monaco-editor"],
+        "skipLibCheck": true,
         "esModuleInterop": true,
         "forceConsistentCasingInFileNames": true
     },
