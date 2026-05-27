@@ -6,12 +6,50 @@ import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
 import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
+import { createPeerId } from "y-webtorrent";
+
+const peerIdStorageKey = "editor-peer-id";
 
 // generate a random sequence of characters
 function makeId(): string {
     return [...window.crypto.getRandomValues(new Uint8Array(20))]
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join("");
+}
+
+function encodePeerId(peerId: string): string {
+    return btoa(peerId);
+}
+
+function decodePeerId(value: string): string | null {
+    try {
+        const peerId = atob(value);
+        return peerId.length === 20 ? peerId : null;
+    } catch {
+        return null;
+    }
+}
+
+function getStablePeerId(): string {
+    const cachedPeerId = localStorage.getItem(peerIdStorageKey);
+    if (cachedPeerId) {
+        const decodedPeerId = decodePeerId(cachedPeerId);
+        if (decodedPeerId) return decodedPeerId;
+    }
+
+    const peerId = createPeerId();
+    localStorage.setItem(peerIdStorageKey, encodePeerId(peerId));
+    return peerId;
+}
+
+function peerIdLabel(peerId: string): string {
+    let label = "";
+    for (let index = 0; index < 4; index++) {
+        const code = peerId.charCodeAt(index);
+        if (Number.isNaN(code)) break;
+        label += code.toString(16).padStart(2, "0");
+    }
+    return label;
 }
 
 globalThis.MonacoEnvironment = {
@@ -32,8 +70,8 @@ globalThis.MonacoEnvironment = {
     },
 };
 
-const peerId = makeId();
-console.info("peerId:", peerId);
+const peerId = getStablePeerId();
+console.info("peerId:", peerIdLabel(peerId));
 
 async function main() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -64,13 +102,13 @@ async function main() {
         name = cachedName;
     }
     if (name == null || name === "") {
-        name = `Peer ${peerId.slice(0, 8)}`;
+        name = `Peer ${peerIdLabel(peerId)}`;
     }
     localStorage.setItem("editor-name", name);
 
     mount(App, {
         target: appEl,
-        props: { roomId, name },
+        props: { roomId, name, peerId },
     });
 }
 

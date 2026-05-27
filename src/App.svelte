@@ -25,11 +25,12 @@ type ConnectionStatusEvent = {
 interface Props {
     roomId: string;
     name: string;
+    peerId: string;
 }
 
 const discoveryUrls = [...defaultTrackerUrls];
 
-let { roomId, name }: Props = $props();
+let { roomId, name, peerId }: Props = $props();
 
 let provider: WebtorrentProvider | undefined;
 let editor: monaco.editor.ICodeEditor | undefined;
@@ -52,6 +53,7 @@ let currentLanguage = $state("plaintext");
 
 function onChangeName() {
     console.debug("new name:", name);
+    localStorage.setItem("editor-name", name);
     const existingUserState = provider?.awareness.getLocalState()?.user;
     provider?.awareness.setLocalStateField("user", { ...existingUserState, name });
 }
@@ -72,6 +74,13 @@ async function handleLanguageSelect() {
 onMount(() => {
     let disposed = false;
     let ydoc: Y.Doc | undefined;
+
+    function destroyProvider() {
+        if (!provider) return;
+        provider.awareness.setLocalState(null);
+        provider.destroy();
+        provider = undefined;
+    }
 
     async function initialize() {
         const monaco = await import("monaco-editor");
@@ -96,7 +105,7 @@ onMount(() => {
         ydoc = new Y.Doc();
         const type = ydoc.getText("monaco");
 
-        provider = new WebtorrentProvider(roomId, ydoc, { trackers: discoveryUrls });
+        provider = new WebtorrentProvider(roomId, ydoc, { trackers: discoveryUrls, peerId });
         const updateConnectionStatus = () => {
             discoveryConnectedCount = provider?.trackerConnections.filter((connection) => connection.isOpen()).length ?? 0;
             rtcPeerCount = provider?.peers.size ?? 0;
@@ -155,7 +164,7 @@ onMount(() => {
 
     initialize();
 
-    const beforeUnload = () => provider?.disconnect();
+    const beforeUnload = () => destroyProvider();
     window.addEventListener("beforeunload", beforeUnload);
 
     return () => {
@@ -163,7 +172,7 @@ onMount(() => {
         window.removeEventListener("beforeunload", beforeUnload);
         window.clearInterval(connectionStatusInterval);
         editorResizeObserver?.disconnect();
-        provider?.destroy();
+        destroyProvider();
         editor?.dispose();
         ydoc?.destroy();
     };
