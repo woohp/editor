@@ -31,14 +31,14 @@ function decodePeerId(value: string): string | null {
 }
 
 function getStablePeerId(): string {
-    const cachedPeerId = localStorage.getItem(peerIdStorageKey);
+    const cachedPeerId = sessionStorage.getItem(peerIdStorageKey);
     if (cachedPeerId) {
         const decodedPeerId = decodePeerId(cachedPeerId);
         if (decodedPeerId) return decodedPeerId;
     }
 
     const peerId = createPeerId();
-    localStorage.setItem(peerIdStorageKey, encodePeerId(peerId));
+    sessionStorage.setItem(peerIdStorageKey, encodePeerId(peerId));
     return peerId;
 }
 
