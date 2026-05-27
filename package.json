@@ -27,7 +27,7 @@
         "y-indexeddb": "^9.0.12",
         "y-monaco": "^0.1.6",
         "y-protocols": "^1.0.7",
-        "y-webrtc": "^10.3.0",
+        "y-webtorrent": "github:woohp/y-webtorrent",
         "yjs": "^13.6.30"
     },
     "overrides": {

@@ -3,7 +3,7 @@ import type * as monaco from "monaco-editor";
 import { onMount } from "svelte";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { MonacoBinding } from "y-monaco";
-import { WebrtcProvider } from "y-webrtc";
+import { defaultTrackerUrls, WebtorrentProvider } from "y-webtorrent";
 import * as Y from "yjs";
 
 interface Changes {
@@ -17,44 +17,33 @@ interface PeerState {
     language?: string;
 }
 
-interface PeersEvent {
-    added: string[];
-    removed: string[];
-    webrtcPeers: string[];
-    bcPeers: string[];
-}
-
-interface SignalingConnection {
-    connected: boolean;
-    connecting: boolean;
-    unsuccessfulReconnects: number;
-    on(eventName: "connect" | "disconnect", cb: () => void): void;
-}
-
-type ProviderWithSignaling = WebrtcProvider & { signalingConns: SignalingConnection[] };
+type ConnectionStatusEvent = {
+    status: string;
+    message?: { complete?: number; incomplete?: number };
+};
 
 interface Props {
     roomId: string;
     name: string;
 }
 
-const signalingServers = ["wss://signaling.yjs.dev"];
+const discoveryUrls = [...defaultTrackerUrls];
 
 let { roomId, name }: Props = $props();
 
-let provider: WebrtcProvider | undefined;
+let provider: WebtorrentProvider | undefined;
 let editor: monaco.editor.ICodeEditor | undefined;
 let editorModel: monaco.editor.ITextModel | undefined;
 let editorResizeObserver: ResizeObserver | undefined;
+let connectionStatusInterval: number | undefined;
 
 let states = $state(new Map<number, PeerState>());
 let providerActive = $state(false);
-let signalingConnected = $state(false);
-let signalingConnecting = $state(false);
-let signalingRetries = $state(0);
+let discoveryConnectedCount = $state(0);
+let discoveredPeerCount = $state(0);
+let pendingPeerCount = $state(0);
 let providerSynced = $state(false);
-let webrtcPeerCount = $state(0);
-let browserPeerCount = $state(0);
+let rtcPeerCount = $state(0);
 
 let editorEl: HTMLDivElement;
 let nameInputEl: HTMLInputElement;
@@ -107,29 +96,31 @@ onMount(() => {
         ydoc = new Y.Doc();
         const type = ydoc.getText("monaco");
 
-        provider = new WebrtcProvider(roomId, ydoc, { signaling: signalingServers });
-        provider.on("status", ({ connected }: { connected: boolean }) => {
-            providerActive = connected;
+        provider = new WebtorrentProvider(roomId, ydoc, { trackers: discoveryUrls });
+        const updateConnectionStatus = () => {
+            discoveryConnectedCount = provider?.trackerConnections.filter((connection) => connection.isOpen()).length ?? 0;
+            rtcPeerCount = provider?.peers.size ?? 0;
+            providerActive = discoveryConnectedCount > 0 || rtcPeerCount > 0;
+        };
+        provider.on("status", ({ message }: ConnectionStatusEvent) => {
+            discoveredPeerCount = message?.complete ?? discoveredPeerCount;
+            pendingPeerCount = message?.incomplete ?? pendingPeerCount;
+            updateConnectionStatus();
         });
-        provider.on("synced", ({ synced }: { synced: boolean }) => {
+        provider.on("synced", (synced: boolean) => {
             providerSynced = synced;
+            updateConnectionStatus();
         });
-        provider.on("peers", ({ webrtcPeers, bcPeers }: PeersEvent) => {
-            webrtcPeerCount = webrtcPeers.length;
-            browserPeerCount = bcPeers.length;
+        provider.on("peers", (peers: string[]) => {
+            rtcPeerCount = peers.length;
+            updateConnectionStatus();
+        });
+        provider.on("connection-error", () => {
+            updateConnectionStatus();
         });
 
-        const signalingConns = (provider as ProviderWithSignaling).signalingConns;
-        const updateSignalingStatus = () => {
-            signalingConnected = signalingConns.some((conn) => conn.connected);
-            signalingConnecting = signalingConns.some((conn) => conn.connecting);
-            signalingRetries = signalingConns.reduce((total, conn) => total + conn.unsuccessfulReconnects, 0);
-        };
-        for (const conn of signalingConns) {
-            conn.on("connect", updateSignalingStatus);
-            conn.on("disconnect", updateSignalingStatus);
-        }
-        updateSignalingStatus();
+        connectionStatusInterval = window.setInterval(updateConnectionStatus, 1000);
+        updateConnectionStatus();
 
         new MonacoBinding(type, model, new Set([editor]), provider.awareness);
         const awareness = provider.awareness;
@@ -150,6 +141,11 @@ onMount(() => {
 
         if (window.matchMedia("(prefers-color-scheme: dark)").matches) monaco.editor.setTheme("vs-dark");
 
+        if (disposed) {
+            window.clearInterval(connectionStatusInterval);
+            return;
+        }
+
         availableLanguages = [];
         for (const lang of monaco.languages.getLanguages()) {
             if (!lang.aliases) continue;
@@ -165,8 +161,9 @@ onMount(() => {
     return () => {
         disposed = true;
         window.removeEventListener("beforeunload", beforeUnload);
+        window.clearInterval(connectionStatusInterval);
         editorResizeObserver?.disconnect();
-        provider?.disconnect();
+        provider?.destroy();
         editor?.dispose();
         ydoc?.destroy();
     };
@@ -234,16 +231,19 @@ onMount(() => {
                 <dt class="text-neutral-600">signal</dt>
                 <dd class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 text-neutral-300">
                     <span
-                        class={signalingConnected ? "h-1.5 w-1.5 rounded-full bg-green-400" : "h-1.5 w-1.5 rounded-full bg-red-500"}
+                        class={discoveryConnectedCount > 0 ? "h-1.5 w-1.5 rounded-full bg-green-400" : "h-1.5 w-1.5 rounded-full bg-red-500"}
                     ></span>
-                    <span>{signalingConnected ? "connected" : signalingConnecting ? "connecting" : `retrying ${signalingRetries}`}</span>
+                    <span>{discoveryConnectedCount > 0 ? `${discoveryConnectedCount}/${discoveryUrls.length} connected` : "connecting"}</span>
                 </dd>
 
                 <dt class="text-neutral-600">sync</dt>
                 <dd class="text-neutral-300">{providerSynced ? "synced" : "waiting"}</dd>
 
                 <dt class="text-neutral-600">peers</dt>
-                <dd class="text-neutral-300">{webrtcPeerCount} rtc / {browserPeerCount} tab</dd>
+                <dd class="text-neutral-300">{rtcPeerCount} rtc</dd>
+
+                <dt class="text-neutral-600">network</dt>
+                <dd class="text-neutral-300">{discoveredPeerCount} ready / {pendingPeerCount} pending</dd>
             </dl>
         </div>
     </aside>
