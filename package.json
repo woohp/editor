@@ -10,25 +10,25 @@
         "start": "vp dev",
         "build": "vp build",
         "preview": "vp preview",
-        "check": "vp check && svelte-check --tsconfig ./tsconfig.json && tsc --noEmit",
+        "check": "svelte-check-native --tsconfig ./tsconfig.json",
         "lint": "vp lint",
         "format": "vp fmt --write"
     },
     "devDependencies": {
-        "@sveltejs/vite-plugin-svelte": "^7.0.0",
-        "@tailwindcss/vite": "^4.2.4",
+        "@sveltejs/vite-plugin-svelte": "^7.2.0",
+        "@tailwindcss/vite": "^4.3.2",
+        "@typescript/native-preview": "^7.0.0-dev.20260707.2",
         "monaco-editor": "^0.55.1",
-        "svelte": "^5.55.5",
-        "svelte-check": "^4.4.6",
-        "tailwindcss": "^4.2.4",
-        "typescript": "^6.0.3",
+        "svelte": "^5.56.4",
+        "svelte-check-native": "^0.9.6",
+        "tailwindcss": "^4.3.2",
         "vite": "npm:@voidzero-dev/vite-plus-core@latest",
         "vite-plus": "latest",
         "y-indexeddb": "^9.0.12",
         "y-monaco": "^0.1.6",
         "y-protocols": "^1.0.7",
         "y-webtorrent": "github:woohp/y-webtorrent",
-        "yjs": "^13.6.30"
+        "yjs": "^13.6.31"
     },
     "overrides": {
         "vite": "npm:@voidzero-dev/vite-plus-core@latest",
