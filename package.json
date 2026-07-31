@@ -26,8 +26,10 @@
         "vite-plus": "latest",
         "y-indexeddb": "^9.0.12",
         "y-monaco": "^0.1.6",
+        "y-multiprovider": "git+https://github.com/woohp/y-multiprovider.git",
+        "y-nostr": "git+https://github.com/woohp/y-nostr.git",
         "y-protocols": "^1.0.7",
-        "y-webtorrent": "github:woohp/y-webtorrent",
+        "y-webtorrent": "git+https://github.com/woohp/y-webtorrent.git",
         "yjs": "^13.6.31"
     },
     "overrides": {
@@ -37,5 +39,11 @@
     "browserslist": [
         "last 2 Chrome versions"
     ],
-    "packageManager": "npm@11.12.1"
+    "packageManager": "npm@11.12.1",
+    "allowScripts": {
+        "webrtc-data-peer@0.1.0": true,
+        "y-multiprovider@0.1.0": true,
+        "y-nostr@0.1.0": true,
+        "y-webtorrent@0.1.0": true
+    }
 }

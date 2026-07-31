@@ -1,9 +1,12 @@
 <script lang="ts">
 import type * as monaco from "monaco-editor";
 import { onMount } from "svelte";
+import { MultiProvider } from "y-multiprovider";
+import { NostrProvider } from "y-nostr";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { MonacoBinding } from "y-monaco";
-import { defaultTrackerUrls, WebtorrentProvider } from "y-webtorrent";
+import type { Awareness } from "y-protocols/awareness";
+import { createPeerId, WebtorrentProvider } from "y-webtorrent";
 import * as Y from "yjs";
 
 interface Changes {
@@ -13,14 +16,18 @@ interface Changes {
 }
 
 interface PeerState {
-    user: { name: string };
+    user?: { name: string };
     language?: string;
 }
 
-type ConnectionStatusEvent = {
-    status: string;
-    message?: { complete?: number; incomplete?: number };
-};
+interface ConnectionStatusEvent {
+    provider: string;
+    event: {
+        status: string;
+        relay?: string;
+        tracker?: string;
+    };
+}
 
 interface Props {
     roomId: string;
@@ -28,21 +35,18 @@ interface Props {
     peerId: string;
 }
 
-const discoveryUrls = [...defaultTrackerUrls];
+const providerCount = 2;
 
 let { roomId, name, peerId }: Props = $props();
 
-let provider: WebtorrentProvider | undefined;
+let provider: MultiProvider | undefined;
 let editor: monaco.editor.ICodeEditor | undefined;
 let editorModel: monaco.editor.ITextModel | undefined;
 let editorResizeObserver: ResizeObserver | undefined;
-let connectionStatusInterval: number | undefined;
 
 let states = $state(new Map<number, PeerState>());
 let providerActive = $state(false);
-let discoveryConnectedCount = $state(0);
-let discoveredPeerCount = $state(0);
-let pendingPeerCount = $state(0);
+let connectedProviderCount = $state(0);
 let providerSynced = $state(false);
 let rtcPeerCount = $state(0);
 
@@ -54,8 +58,7 @@ let currentLanguage = $state("plaintext");
 function onChangeName() {
     console.debug("new name:", name);
     localStorage.setItem("editor-name", name);
-    const existingUserState = provider?.awareness.getLocalState()?.user;
-    provider?.awareness.setLocalStateField("user", { ...existingUserState, name });
+    provider?.awareness.setLocalStateField("user", { name });
 }
 
 function onChangeNameKeydown(e: KeyboardEvent) {
@@ -105,36 +108,54 @@ onMount(() => {
         ydoc = new Y.Doc();
         const type = ydoc.getText("monaco");
 
-        provider = new WebtorrentProvider(roomId, ydoc, { trackers: discoveryUrls, peerId });
+        provider = new MultiProvider(roomId, ydoc, {
+            providers: [
+                {
+                    name: "nostr",
+                    create: ({ doc, awareness }) =>
+                        new NostrProvider(roomId, doc, { awareness }),
+                },
+                {
+                    name: "webtorrent",
+                    create: ({ doc, awareness }) =>
+                        new WebtorrentProvider(roomId, doc, {
+                            awareness,
+                            peerId: createPeerId(),
+                        }),
+                },
+            ],
+        });
+
+        const connectedPaths = new Map<string, Set<string>>();
         const updateConnectionStatus = () => {
-            discoveryConnectedCount = provider?.trackerConnections.filter((connection) => connection.isOpen()).length ?? 0;
-            rtcPeerCount = provider?.peers.size ?? 0;
-            providerActive = discoveryConnectedCount > 0 || rtcPeerCount > 0;
+            connectedProviderCount = [...connectedPaths.values()].filter(
+                (paths) => paths.size > 0,
+            ).length;
+            providerActive = connectedProviderCount > 0 || rtcPeerCount > 0;
         };
-        provider.on("status", ({ message }: ConnectionStatusEvent) => {
-            discoveredPeerCount = message?.complete ?? discoveredPeerCount;
-            pendingPeerCount = message?.incomplete ?? pendingPeerCount;
+        provider.on("status", (status: unknown) => {
+            const { provider: providerName, event } = status as ConnectionStatusEvent;
+            const paths = connectedPaths.get(providerName) ?? new Set<string>();
+            const endpoint = event.relay ?? event.tracker ?? "default";
+            if (event.status === "connected") paths.add(endpoint);
+            else paths.delete(endpoint);
+            connectedPaths.set(providerName, paths);
             updateConnectionStatus();
         });
-        provider.on("synced", (synced: boolean) => {
-            providerSynced = synced;
-            updateConnectionStatus();
-        });
-        provider.on("peers", (peers: string[]) => {
-            rtcPeerCount = peers.length;
-            updateConnectionStatus();
-        });
-        provider.on("connection-error", () => {
-            updateConnectionStatus();
+        provider.on("connection-error", (error: unknown) => {
+            const { provider: providerName } = error as { provider: string };
+            console.warn(`${providerName} connection error`);
         });
 
-        connectionStatusInterval = window.setInterval(updateConnectionStatus, 1000);
-        updateConnectionStatus();
-
-        new MonacoBinding(type, model, new Set([editor]), provider.awareness);
         const awareness = provider.awareness;
+        awareness.setLocalState({ peerId });
         awareness.on("change", (changes: Changes) => {
-            states = new Map(awareness.getStates() as Map<number, PeerState>);
+            states = new Map(
+                [...awareness.getStates()].filter(([clientId]) => clientId !== ydoc!.clientID),
+            ) as Map<number, PeerState>;
+            rtcPeerCount = states.size;
+            providerSynced = rtcPeerCount > 0;
+            updateConnectionStatus();
             for (const peerNumber of [...changes.added, ...changes.updated]) {
                 const peerLanguage = states.get(peerNumber)?.language;
                 if (peerLanguage && peerLanguage !== currentLanguage) {
@@ -145,15 +166,18 @@ onMount(() => {
             }
         });
         awareness.setLocalStateField("user", { name });
+        new MonacoBinding(
+            type,
+            model,
+            new Set([editor]),
+            awareness as unknown as Awareness,
+        );
 
         new IndexeddbPersistence(roomId, ydoc);
 
         if (window.matchMedia("(prefers-color-scheme: dark)").matches) monaco.editor.setTheme("vs-dark");
 
-        if (disposed) {
-            window.clearInterval(connectionStatusInterval);
-            return;
-        }
+        if (disposed) return;
 
         availableLanguages = [];
         for (const lang of monaco.languages.getLanguages()) {
@@ -170,7 +194,6 @@ onMount(() => {
     return () => {
         disposed = true;
         window.removeEventListener("beforeunload", beforeUnload);
-        window.clearInterval(connectionStatusInterval);
         editorResizeObserver?.disconnect();
         destroyProvider();
         editor?.dispose();
@@ -220,13 +243,11 @@ onMount(() => {
                         Edit
                     </button>
                 </li>
-                {#each [...states] as [_, peer], i}
-                    {#if i > 0}
+                {#each [...states] as [_, peer]}
                     <li class="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
                         <span class="text-neutral-600">-</span>
-                        <span class="min-w-0 truncate text-sm text-neutral-300">{peer.user.name}</span>
+                        <span class="min-w-0 truncate text-sm text-neutral-300">{peer.user?.name ?? "Anonymous"}</span>
                     </li>
-                    {/if}
                 {/each}
             </ul>
         </div>
@@ -240,9 +261,9 @@ onMount(() => {
                 <dt class="text-neutral-600">signal</dt>
                 <dd class="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 text-neutral-300">
                     <span
-                        class={discoveryConnectedCount > 0 ? "h-1.5 w-1.5 rounded-full bg-green-400" : "h-1.5 w-1.5 rounded-full bg-red-500"}
+                        class={connectedProviderCount > 0 ? "h-1.5 w-1.5 rounded-full bg-green-400" : "h-1.5 w-1.5 rounded-full bg-red-500"}
                     ></span>
-                    <span>{discoveryConnectedCount > 0 ? `${discoveryConnectedCount}/${discoveryUrls.length} connected` : "connecting"}</span>
+                    <span>{connectedProviderCount > 0 ? `${connectedProviderCount}/${providerCount} connected` : "connecting"}</span>
                 </dd>
 
                 <dt class="text-neutral-600">sync</dt>
@@ -251,8 +272,8 @@ onMount(() => {
                 <dt class="text-neutral-600">peers</dt>
                 <dd class="text-neutral-300">{rtcPeerCount} rtc</dd>
 
-                <dt class="text-neutral-600">network</dt>
-                <dd class="text-neutral-300">{discoveredPeerCount} ready / {pendingPeerCount} pending</dd>
+                <dt class="text-neutral-600">transports</dt>
+                <dd class="text-neutral-300">Nostr + WebTorrent</dd>
             </dl>
         </div>
     </aside>
