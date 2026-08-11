@@ -12,9 +12,11 @@
         "preview": "vp preview",
         "check": "svelte-check-native --tsconfig ./tsconfig.json",
         "lint": "vp lint",
-        "format": "vp fmt --write"
+        "format": "vp fmt --write",
+        "test:cross-network": "node e2e/cross-network/run.mjs"
     },
     "devDependencies": {
+        "@playwright/test": "^1.62.1",
         "@sveltejs/vite-plugin-svelte": "^7.2.0",
         "@tailwindcss/vite": "^4.3.2",
         "@typescript/native-preview": "^7.0.0-dev.20260707.2",

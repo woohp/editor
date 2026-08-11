@@ -24,3 +24,7 @@ node_modules
 .DS_Store
 
 .parcel-cache
+
+playwright-report/
+test-results/
+e2e/cross-network/results/

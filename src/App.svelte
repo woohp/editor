@@ -107,13 +107,14 @@ onMount(() => {
 
         ydoc = new Y.Doc();
         const type = ydoc.getText("monaco");
+        const debugConnections = localStorage.getItem("editor-webrtc-debug") === "1";
 
         provider = new MultiProvider(roomId, ydoc, {
             providers: [
                 {
                     name: "nostr",
                     create: ({ doc, awareness }) =>
-                        new NostrProvider(roomId, doc, { awareness }),
+                        new NostrProvider(roomId, doc, { awareness, debug: debugConnections }),
                 },
                 {
                     name: "webtorrent",
@@ -121,10 +122,27 @@ onMount(() => {
                         new WebtorrentProvider(roomId, doc, {
                             awareness,
                             peerId: createPeerId(),
+                            debug: debugConnections,
                         }),
                 },
             ],
         });
+
+        if (debugConnections) {
+            provider.on("debug", (debug: unknown) => {
+                const detail = debug as { provider?: string; event?: { type?: string } };
+                if (detail.event?.type !== "peer-connect") return;
+                const diagnostics = (window as typeof window & {
+                    __connectionDiagnostics?: unknown[];
+                }).__connectionDiagnostics ??= [];
+                diagnostics.push({
+                    wallTime: Date.now(),
+                    monotonicTime: performance.now(),
+                    detail,
+                });
+                console.debug("[WebRTC]", detail);
+            });
+        }
 
         const connectedPaths = new Map<string, Set<string>>();
         const updateConnectionStatus = () => {
