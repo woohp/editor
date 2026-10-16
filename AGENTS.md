@@ -1,29 +1,43 @@
-# Repository Guide
+# Editor agent guide
+
+Editor is a serverless, collaborative Monaco editor: a static Svelte 5 app on GitHub Pages (https://woohp.github.io/editor/). Public Nostr relays and WebTorrent trackers are used only for peer discovery; documents sync peer-to-peer over WebRTC with Yjs and are cached locally in IndexedDB. There is no backend, account, or server-side storage.
+
+This is a small personal project in a public repo. Favor the simplest code that works in a current Chrome (`browserslist`); do not add machinery for rare peer/transport races, abstractions for a second editor or room type, or defensive handling for states the libraries already guarantee.
+
+## Dependencies
+
+- `y-multiprovider`, `y-nostr`, `y-webtorrent`, and their `webrtc-data-peer` dependency are the owner's own packages, installed from git and pinned only by `package-lock.json`. Fix transport, awareness, or discovery bugs there and update the lockfile here; do not patch around them in the app.
+- Those git packages build in their `prepare` scripts, which npm runs only when listed in `allowScripts`. Keep those entries matched to the package versions.
+- `vite` and `vitest` are overridden to Vite+ (`vite-plus`), tracked at `latest`. Import config helpers from `vite-plus`, not `vite`; lint enforces this.
+- Dependencies ship their own types. Do not add local declaration shims; an ambient `declare module` overrides a package's real types. `MultiAwareness` is not a y-protocols `Awareness`, so `App.svelte` casts it for `MonacoBinding`.
+
+## Build and deployment
+
+- Vite root is `src`; `npm run build` writes to `../docs`, which is committed and served by GitHub Pages from `master`. Rebuild and commit `docs/` alongside source changes. Do not change the output directory or `base: "./"`.
+- `index.ts` serves both pages: without `?room=` it shows the "New" link; with a 40-character room ID it mounts `App.svelte`. Monaco loads through a dynamic import so the landing page stays light.
+- Monaco language workers are wired explicitly through `globalThis.MonacoEnvironment` in `src/index.ts`; Vite needs those `?worker` imports for language features.
+
+## Collaboration invariants
+
+- The room ID is the shared identity for everything: it names the Yjs room, seeds y-nostr's default relay selection, derives the WebTorrent info hash, and keys `IndexeddbPersistence`. Changing its format or derivation splits peers across relays/swarms and orphans cached documents.
+- Document text lives in `ydoc.getText("monaco")`. The selected language is not document state: it travels as the awareness field `language`, and any peer's change is adopted by everyone.
+- `MultiProvider` merges per-transport awareness into one logical peer by the `peerId` field of local awareness state. Keep `peerId` in that state: update fields with `setLocalStateField`, never replace the whole state without it.
+- The logical peer ID is per tab (`sessionStorage`), so reloads keep their identity while separate tabs are separate peers. The display name is shared across tabs (`localStorage`).
+- Both discovery paths (Nostr and WebTorrent) are intentional redundancy, not alternatives to choose between. The status panel's "signal" counts transports with at least one connected relay/tracker, not peers.
+- Setting `localStorage["editor-webrtc-debug"] = "1"` enables provider debug logging and records `peer-connect` events in `window.__connectionDiagnostics`. The cross-network harness depends on both; keep them working when changing provider setup.
+
+## Styling
+
+Tailwind v4 is loaded through `@tailwindcss/vite` and `@import "tailwindcss"` in `src/style.css`; there is no JS config. `style.css` also styles y-monaco's remote cursor classes (`yRemoteSelection*`).
 
 ## Commands
 
-- Use npm when installing dependencies; `package-lock.json` is the only lockfile.
-- Start the dev server with `npm run dev` or `npm run start`.
-- Run focused verification with `npm run check` for Vite+ checks plus Svelte + TypeScript, and `npm run lint` for Vite+ linting.
-- Build with `npm run build`; Vite+ writes production output to `../docs` rather than a local `dist/` directory.
-- Format with `npm run format`; this runs `vp fmt --write` with config in `vite.config.ts`.
-- Run the deployed app across two real networks with `npm run test:cross-network -- <ssh-host> [attempts]`; read `e2e/cross-network/README.md` first.
+- Install: `npm install` (`package-lock.json` is the only lockfile)
+- Dev server: `npm run dev`
+- Format: `npm run format`
+- Type check: `npm run check` (svelte-check with the TypeScript native preview)
+- Lint: `npm run lint` (type-aware oxlint through Vite+)
+- Build: `npm run build`
+- Cross-network sync: `npm run test:cross-network -- <ssh-host> [attempts]`; read `e2e/cross-network/README.md` first. It needs a second machine on a genuinely different network, so ask before running it.
 
-## Project Shape
-
-- This is a single-package Svelte 5 + Vite app, not a monorepo.
-- Vite root is `src`, so `src/index.html` and `src/index.ts` are the browser entrypoints.
-- `vite.config.ts` sets `base: "./"` for relative asset URLs and uses `svelte({ configFile: "../svelte.config.js" })` because the Vite root is `src`.
-- The app is an online collaborative Monaco editor using Yjs, `y-multiprovider`, `y-nostr`, `y-webtorrent`, `y-indexeddb`, and `y-monaco`; collaboration starts only when the URL has a 40-character `?room=` value.
-- No unit-test runner is configured; use `check`, `lint`, and `build` for local validation, plus the cross-network harness for signaling/NAT changes.
-
-## Gotchas
-
-- Do not change the build output directory casually: `README.md` points to the GitHub Pages site, and the production build targets `../docs` for that deployment shape.
-- Monaco web workers are wired explicitly in `src/index.ts` through `globalThis.MonacoEnvironment`; language-worker imports are required for editor features in Vite.
-- `MultiProvider` coordinates redundant Nostr relay and WebTorrent tracker signaling. Each transport gets its own Awareness instance while the editor consumes merged awareness.
-- The cross-network harness enables `editor-webrtc-debug` in local storage to capture per-provider data-channel timing; keep that instrumentation compatible when changing provider setup.
-- Local persistence is keyed by `roomId` through `IndexeddbPersistence`; changing room ID semantics can orphan or mix cached documents.
-- `svelte.config.js` suppresses all `a11y-*` Svelte warnings, so `npm run check` will not report those.
-- Tailwind is loaded through the Vite plugin and `@import "tailwindcss"` in `src/style.css`; `tailwind.config.js` sets `important: true`.
-- Local declaration shims live under `src/types/` for packages with missing/incomplete types; check there before adding broad `any` workarounds.
+There is no unit-test runner. After code changes run `format`, `check`, `lint`, and `build`. For collaboration changes, also exercise two tabs on one room in the dev server, and propose the cross-network harness for signaling, NAT, or provider changes.
