@@ -17,39 +17,19 @@ function makeId(): string {
         .join("");
 }
 
-function encodePeerId(peerId: string): string {
-    return btoa(peerId);
-}
-
-function decodePeerId(value: string): string | null {
-    try {
-        const peerId = atob(value);
-        return peerId.length === 20 ? peerId : null;
-    } catch {
-        return null;
-    }
-}
-
 function getStablePeerId(): string {
     const cachedPeerId = sessionStorage.getItem(peerIdStorageKey);
-    if (cachedPeerId) {
-        const decodedPeerId = decodePeerId(cachedPeerId);
-        if (decodedPeerId) return decodedPeerId;
-    }
+    if (cachedPeerId?.length === 20) return cachedPeerId;
 
     const peerId = createPeerId();
-    sessionStorage.setItem(peerIdStorageKey, encodePeerId(peerId));
+    sessionStorage.setItem(peerIdStorageKey, peerId);
     return peerId;
 }
 
 function peerIdLabel(peerId: string): string {
-    let label = "";
-    for (let index = 0; index < 4; index++) {
-        const code = peerId.charCodeAt(index);
-        if (Number.isNaN(code)) break;
-        label += code.toString(16).padStart(2, "0");
-    }
-    return label;
+    return Array.from({ length: 4 }, (_, index) =>
+        peerId.charCodeAt(index).toString(16).padStart(2, "0"),
+    ).join("");
 }
 
 globalThis.MonacoEnvironment = {
@@ -82,7 +62,7 @@ async function main() {
         newRoomEl.classList.remove("hidden");
         const newRoomLink = newRoomEl.querySelector("a");
         if (newRoomLink) {
-            newRoomLink.href = "?room=" + encodeURIComponent(makeId());
+            newRoomLink.href = `?room=${makeId()}`;
         }
         return;
     }
@@ -94,16 +74,10 @@ async function main() {
     const appEl = document.querySelector("#app") as HTMLDivElement;
     appEl.classList.remove("hidden");
 
-    const cachedName = localStorage.getItem("editor-name");
-    let name: string | null;
-    if (cachedName == null) {
-        name = prompt("Your name is...");
-    } else {
-        name = cachedName;
-    }
-    if (name == null || name === "") {
-        name = `Peer ${peerIdLabel(peerId)}`;
-    }
+    // prompt only when no name is stored; an empty answer falls back to a generated name
+    const name =
+        (localStorage.getItem("editor-name") ?? prompt("Your name is...")) ||
+        `Peer ${peerIdLabel(peerId)}`;
     localStorage.setItem("editor-name", name);
 
     mount(App, {
