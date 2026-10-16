@@ -25,5 +25,9 @@ export default defineConfig({
         emptyOutDir: true,
     },
     plugins: [svelte(), tailwindcss()],
+    resolve: {
+        // y-monaco deep-imports a path Monaco's exports map hides; same module as the main entry's
+        alias: { "monaco-editor/esm/vs/editor/editor.api.js": "monaco-editor/editor/editor.api" },
+    },
     root: "src",
 });

@@ -20,7 +20,7 @@
         "@sveltejs/vite-plugin-svelte": "^7.3.1",
         "@tailwindcss/vite": "^4.3.3",
         "@typescript/native-preview": "^7.0.0-dev.20260707.2",
-        "monaco-editor": "^0.55.1",
+        "monaco-editor": "^0.57.0",
         "svelte": "^5.57.2",
         "svelte-check-native": "^1.9.1",
         "tailwindcss": "^4.3.3",
