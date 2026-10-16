@@ -1,5 +1,5 @@
 <script lang="ts">
-import type * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor";
 import { onMount } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
 import { MultiProvider } from "y-multiprovider";
@@ -31,11 +31,14 @@ interface Props {
 }
 
 const providerCount = 2;
+const availableLanguages = monaco.languages
+    .getLanguages()
+    .flatMap((lang) => (lang.aliases ? [[lang.id, lang.aliases[0]]] : []));
 
 let { roomId, name, peerId }: Props = $props();
 
-let provider: MultiProvider | undefined;
-let setLanguage: (language: string) => void = () => {};
+let provider: MultiProvider;
+let model: monaco.editor.ITextModel;
 
 let states = $state(new Map<number, PeerState>());
 // "<provider>:<endpoint>" -> provider name, for each connected relay/tracker
@@ -45,127 +48,104 @@ const providerActive = $derived(connectedProviderCount > 0 || states.size > 0);
 
 let editorEl: HTMLDivElement;
 let nameInputEl: HTMLInputElement;
-let availableLanguages = $state<[string, string][]>([]);
 let currentLanguage = $state("plaintext");
 
 function onChangeName() {
     localStorage.setItem("editor-name", name);
-    provider?.awareness.setLocalStateField("user", { name });
+    provider.awareness.setLocalStateField("user", { name });
 }
 
 function onChangeNameKeydown(e: KeyboardEvent) {
     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
 }
 
+function setLanguage(language: string) {
+    currentLanguage = language;
+    monaco.editor.setModelLanguage(model, language);
+    provider.awareness.setLocalStateField("language", language);
+}
+
 onMount(() => {
-    let disposed = false;
-    let editor: monaco.editor.IStandaloneCodeEditor | undefined;
-    let resizeObserver: ResizeObserver | undefined;
-    let ydoc: Y.Doc | undefined;
+    const editor = monaco.editor.create(editorEl, {
+        language: currentLanguage,
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs",
+    });
+    model = editor.getModel()!;
 
-    async function initialize() {
-        const monaco = await import("monaco-editor");
-        if (disposed) return;
+    const ydoc = new Y.Doc();
+    const debugConnections = localStorage.getItem("editor-webrtc-debug") === "1";
 
-        editor = monaco.editor.create(editorEl, {
-            language: currentLanguage,
-            scrollBeyondLastLine: false,
-        });
-        resizeObserver = new ResizeObserver(() => editor?.layout());
-        resizeObserver.observe(editorEl);
-        const model = editor.getModel()!;
+    provider = new MultiProvider(roomId, ydoc, {
+        providers: [
+            {
+                name: "nostr",
+                create: ({ doc, awareness }) =>
+                    new NostrProvider(roomId, doc, { awareness, debug: debugConnections }),
+            },
+            {
+                name: "webtorrent",
+                create: ({ doc, awareness }) =>
+                    new WebtorrentProvider(roomId, doc, {
+                        awareness,
+                        debug: debugConnections,
+                    }),
+            },
+        ],
+    });
 
-        ydoc = new Y.Doc();
-        const type = ydoc.getText("monaco");
-        const debugConnections = localStorage.getItem("editor-webrtc-debug") === "1";
-
-        provider = new MultiProvider(roomId, ydoc, {
-            providers: [
-                {
-                    name: "nostr",
-                    create: ({ doc, awareness }) =>
-                        new NostrProvider(roomId, doc, { awareness, debug: debugConnections }),
-                },
-                {
-                    name: "webtorrent",
-                    create: ({ doc, awareness }) =>
-                        new WebtorrentProvider(roomId, doc, {
-                            awareness,
-                            debug: debugConnections,
-                        }),
-                },
-            ],
-        });
-
-        if (debugConnections) {
-            provider.on("debug", (debug: unknown) => {
-                const detail = debug as { provider?: string; event?: { type?: string } };
-                if (detail.event?.type !== "peer-connect") return;
-                const diagnostics = (window as typeof window & {
-                    __connectionDiagnostics?: unknown[];
-                }).__connectionDiagnostics ??= [];
-                diagnostics.push({
-                    wallTime: Date.now(),
-                    monotonicTime: performance.now(),
-                    detail,
-                });
-                console.debug("[WebRTC]", detail);
+    if (debugConnections) {
+        provider.on("debug", (debug: unknown) => {
+            const detail = debug as { provider?: string; event?: { type?: string } };
+            if (detail.event?.type !== "peer-connect") return;
+            const diagnostics = (window as typeof window & {
+                __connectionDiagnostics?: unknown[];
+            }).__connectionDiagnostics ??= [];
+            diagnostics.push({
+                wallTime: Date.now(),
+                monotonicTime: performance.now(),
+                detail,
             });
-        }
-
-        provider.on("status", (status: unknown) => {
-            const { provider: providerName, event } = status as ConnectionStatusEvent;
-            const endpoint = `${providerName}:${event.relay ?? event.tracker}`;
-            if (event.status === "connected") connectedEndpoints.set(endpoint, providerName);
-            else connectedEndpoints.delete(endpoint);
+            console.debug("[WebRTC]", detail);
         });
-        provider.on("connection-error", (error: unknown) => {
-            const { provider: providerName } = error as { provider: string };
-            console.warn(`${providerName} connection error`);
-        });
-
-        const awareness = provider.awareness;
-        setLanguage = (language) => {
-            currentLanguage = language;
-            monaco.editor.setModelLanguage(model, language);
-            awareness.setLocalStateField("language", language);
-        };
-        awareness.setLocalState({ peerId });
-        awareness.on("change", (changes) => {
-            states = new Map(
-                [...awareness.getStates()].filter(([clientId]) => clientId !== awareness.clientID),
-            ) as Map<number, PeerState>;
-            for (const clientId of [...changes.added, ...changes.updated]) {
-                const peerLanguage = states.get(clientId)?.language;
-                if (peerLanguage && peerLanguage !== currentLanguage) setLanguage(peerLanguage);
-            }
-        });
-        awareness.setLocalStateField("user", { name });
-        new MonacoBinding(type, model, new Set([editor]), awareness as unknown as Awareness);
-
-        new IndexeddbPersistence(roomId, ydoc);
-
-        if (window.matchMedia("(prefers-color-scheme: dark)").matches) monaco.editor.setTheme("vs-dark");
-
-        availableLanguages = [];
-        for (const lang of monaco.languages.getLanguages()) {
-            if (!lang.aliases) continue;
-            availableLanguages.push([lang.id, lang.aliases[0]]);
-        }
     }
 
-    initialize();
+    provider.on("status", (status: unknown) => {
+        const { provider: providerName, event } = status as ConnectionStatusEvent;
+        const endpoint = `${providerName}:${event.relay ?? event.tracker}`;
+        if (event.status === "connected") connectedEndpoints.set(endpoint, providerName);
+        else connectedEndpoints.delete(endpoint);
+    });
+    provider.on("connection-error", (error: unknown) => {
+        const { provider: providerName } = error as { provider: string };
+        console.warn(`${providerName} connection error`);
+    });
 
-    const beforeUnload = () => provider?.destroy();
+    const awareness = provider.awareness;
+    awareness.setLocalState({ peerId });
+    awareness.on("change", (changes) => {
+        states = new Map(
+            [...awareness.getStates()].filter(([clientId]) => clientId !== awareness.clientID),
+        ) as Map<number, PeerState>;
+        for (const clientId of [...changes.added, ...changes.updated]) {
+            const peerLanguage = states.get(clientId)?.language;
+            if (peerLanguage && peerLanguage !== currentLanguage) setLanguage(peerLanguage);
+        }
+    });
+    awareness.setLocalStateField("user", { name });
+    new MonacoBinding(ydoc.getText("monaco"), model, new Set([editor]), awareness as unknown as Awareness);
+
+    new IndexeddbPersistence(roomId, ydoc);
+
+    const beforeUnload = () => provider.destroy();
     window.addEventListener("beforeunload", beforeUnload);
 
     return () => {
-        disposed = true;
         window.removeEventListener("beforeunload", beforeUnload);
-        resizeObserver?.disconnect();
-        provider?.destroy();
-        editor?.dispose();
-        ydoc?.destroy();
+        provider.destroy();
+        editor.dispose();
+        ydoc.destroy();
     };
 });
 </script>

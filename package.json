@@ -38,8 +38,5 @@
         "vite": "npm:@voidzero-dev/vite-plus-core@latest",
         "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
     },
-    "browserslist": [
-        "last 2 Chrome versions"
-    ],
     "packageManager": "npm@11.12.1"
 }

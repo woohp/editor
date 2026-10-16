@@ -1,5 +1,4 @@
 import { mount } from "svelte";
-import App from "./App.svelte";
 import "./style.css";
 import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
 import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
@@ -73,6 +72,7 @@ async function main() {
         `Peer ${peerId.slice(0, 8)}`;
     localStorage.setItem("editor-name", name);
 
+    const { default: App } = await import("./App.svelte");
     mount(App, {
         target: appEl,
         props: { roomId, name, peerId },
