@@ -24,9 +24,6 @@ export default defineConfig({
         outDir: "../docs",
         emptyOutDir: true,
     },
-    plugins: [
-        svelte({ configFile: new URL("./svelte.config.js", import.meta.url).pathname }),
-        tailwindcss(),
-    ],
+    plugins: [svelte(), tailwindcss()],
     root: "src",
 });
