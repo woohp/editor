@@ -7,7 +7,7 @@ import { NostrProvider } from "y-nostr";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { MonacoBinding } from "y-monaco";
 import type { Awareness } from "y-protocols/awareness";
-import { createPeerId, WebtorrentProvider } from "y-webtorrent";
+import { WebtorrentProvider } from "y-webtorrent";
 import * as Y from "yjs";
 
 interface PeerState {
@@ -91,7 +91,6 @@ onMount(() => {
                     create: ({ doc, awareness }) =>
                         new WebtorrentProvider(roomId, doc, {
                             awareness,
-                            peerId: createPeerId(),
                             debug: debugConnections,
                         }),
                 },
@@ -116,7 +115,7 @@ onMount(() => {
 
         provider.on("status", (status: unknown) => {
             const { provider: providerName, event } = status as ConnectionStatusEvent;
-            const endpoint = `${providerName}:${event.relay ?? event.tracker ?? "default"}`;
+            const endpoint = `${providerName}:${event.relay ?? event.tracker}`;
             if (event.status === "connected") connectedEndpoints.set(endpoint, providerName);
             else connectedEndpoints.delete(endpoint);
         });
@@ -134,7 +133,7 @@ onMount(() => {
         awareness.setLocalState({ peerId });
         awareness.on("change", (changes) => {
             states = new Map(
-                [...awareness.getStates()].filter(([clientId]) => clientId !== ydoc!.clientID),
+                [...awareness.getStates()].filter(([clientId]) => clientId !== awareness.clientID),
             ) as Map<number, PeerState>;
             for (const clientId of [...changes.added, ...changes.updated]) {
                 const peerLanguage = states.get(clientId)?.language;

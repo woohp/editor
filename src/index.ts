@@ -6,7 +6,6 @@ import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
 import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
 import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
 import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
-import { createPeerId } from "y-webtorrent";
 
 const peerIdStorageKey = "editor-peer-id";
 
@@ -19,17 +18,11 @@ function makeId(): string {
 
 function getStablePeerId(): string {
     const cachedPeerId = sessionStorage.getItem(peerIdStorageKey);
-    if (cachedPeerId?.length === 20) return cachedPeerId;
+    if (cachedPeerId) return cachedPeerId;
 
-    const peerId = createPeerId();
+    const peerId = crypto.randomUUID();
     sessionStorage.setItem(peerIdStorageKey, peerId);
     return peerId;
-}
-
-function peerIdLabel(peerId: string): string {
-    return Array.from({ length: 4 }, (_, index) =>
-        peerId.charCodeAt(index).toString(16).padStart(2, "0"),
-    ).join("");
 }
 
 globalThis.MonacoEnvironment = {
@@ -51,7 +44,7 @@ globalThis.MonacoEnvironment = {
 };
 
 const peerId = getStablePeerId();
-console.info("peerId:", peerIdLabel(peerId));
+console.info("peerId:", peerId);
 
 async function main() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -77,7 +70,7 @@ async function main() {
     // prompt only when no name is stored; an empty answer falls back to a generated name
     const name =
         (localStorage.getItem("editor-name") ?? prompt("Your name is...")) ||
-        `Peer ${peerIdLabel(peerId)}`;
+        `Peer ${peerId.slice(0, 8)}`;
     localStorage.setItem("editor-name", name);
 
     mount(App, {
