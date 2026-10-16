@@ -1,32 +1,24 @@
 <script lang="ts">
-import type * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor";
 import { onMount } from "svelte";
-import { MultiProvider } from "y-multiprovider";
+import { SvelteMap } from "svelte/reactivity";
+import { type AwarenessChanges, MultiProvider } from "y-multiprovider";
 import { NostrProvider } from "y-nostr";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { MonacoBinding } from "y-monaco";
-import type { Awareness } from "y-protocols/awareness";
-import { createPeerId, WebtorrentProvider } from "y-webtorrent";
+import { WebtorrentProvider } from "y-webtorrent";
 import * as Y from "yjs";
-
-interface Changes {
-    added: number[];
-    updated: number[];
-    removed: number[];
-}
 
 interface PeerState {
     user?: { name: string };
     language?: string;
 }
 
-interface ConnectionStatusEvent {
-    provider: string;
-    event: {
-        status: string;
-        relay?: string;
-        tracker?: string;
-    };
+// nostr reports { status, relay }; webtorrent reports { status, tracker }
+interface TransportStatus {
+    status: string;
+    relay?: string;
+    tracker?: string;
 }
 
 interface Props {
@@ -36,186 +28,119 @@ interface Props {
 }
 
 const providerCount = 2;
+const availableLanguages = monaco.languages
+    .getLanguages()
+    .flatMap((lang) => (lang.aliases ? [[lang.id, lang.aliases[0]]] : []));
 
 let { roomId, name, peerId }: Props = $props();
 
-let provider: MultiProvider | undefined;
-let editor: monaco.editor.ICodeEditor | undefined;
-let editorModel: monaco.editor.ITextModel | undefined;
-let editorResizeObserver: ResizeObserver | undefined;
+let provider: MultiProvider;
+let model: monaco.editor.ITextModel;
 
 let states = $state(new Map<number, PeerState>());
-let providerActive = $state(false);
-let connectedProviderCount = $state(0);
-let providerSynced = $state(false);
-let rtcPeerCount = $state(0);
+// "<provider>:<endpoint>" -> provider name, for each connected relay/tracker
+const connectedEndpoints = new SvelteMap<string, string>();
+const connectedProviderCount = $derived(new Set(connectedEndpoints.values()).size);
+const providerActive = $derived(connectedProviderCount > 0 || states.size > 0);
 
 let editorEl: HTMLDivElement;
 let nameInputEl: HTMLInputElement;
-let availableLanguages = $state<[string, string][]>([]);
 let currentLanguage = $state("plaintext");
 
 function onChangeName() {
-    console.debug("new name:", name);
     localStorage.setItem("editor-name", name);
-    provider?.awareness.setLocalStateField("user", { name });
+    provider.awareness.setLocalStateField("user", { name });
 }
 
 function onChangeNameKeydown(e: KeyboardEvent) {
     if (e.key === "Enter") (e.target as HTMLInputElement).blur();
 }
 
-async function handleLanguageSelect() {
-    const monaco = await import("monaco-editor");
-
-    if (!editorModel) return;
-
-    monaco.editor.setModelLanguage(editorModel, currentLanguage);
-    provider?.awareness.setLocalStateField("language", currentLanguage);
+function setLanguage(language: string) {
+    currentLanguage = language;
+    monaco.editor.setModelLanguage(model, language);
+    provider.awareness.setLocalStateField("language", language);
 }
 
 onMount(() => {
-    let disposed = false;
-    let ydoc: Y.Doc | undefined;
+    const editor = monaco.editor.create(editorEl, {
+        language: currentLanguage,
+        automaticLayout: true,
+        scrollBeyondLastLine: false,
+        theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "vs-dark" : "vs",
+    });
+    model = editor.getModel()!;
 
-    function destroyProvider() {
-        if (!provider) return;
-        provider.awareness.setLocalState(null);
-        provider.destroy();
-        provider = undefined;
-    }
+    const ydoc = new Y.Doc();
+    const debugConnections = localStorage.getItem("editor-webrtc-debug") === "1";
 
-    async function initialize() {
-        const monaco = await import("monaco-editor");
-        if (disposed) return;
+    provider = new MultiProvider(ydoc, {
+        providers: [
+            {
+                name: "nostr",
+                create: ({ doc, awareness }) =>
+                    new NostrProvider(roomId, doc, { awareness, debug: debugConnections }),
+            },
+            {
+                name: "webtorrent",
+                create: ({ doc, awareness }) =>
+                    new WebtorrentProvider(roomId, doc, {
+                        awareness,
+                        debug: debugConnections,
+                    }),
+            },
+        ],
+    });
 
-        // create the editor and editor model
-        const editorConfig = {
-            value: "",
-            language: currentLanguage,
-            scrollBeyondLastLine: false,
-        };
-        editor = monaco.editor.create(editorEl, editorConfig);
-        editorResizeObserver = new ResizeObserver(() => editor?.layout());
-        editorResizeObserver.observe(editorEl);
-        console.debug("editor:", editor);
-
-        const model = editor.getModel();
-        if (!model) return;
-        editorModel = model;
-        console.debug("editorModel:", editorModel);
-
-        ydoc = new Y.Doc();
-        const type = ydoc.getText("monaco");
-        const debugConnections = localStorage.getItem("editor-webrtc-debug") === "1";
-
-        provider = new MultiProvider(roomId, ydoc, {
-            providers: [
-                {
-                    name: "nostr",
-                    create: ({ doc, awareness }) =>
-                        new NostrProvider(roomId, doc, { awareness, debug: debugConnections }),
-                },
-                {
-                    name: "webtorrent",
-                    create: ({ doc, awareness }) =>
-                        new WebtorrentProvider(roomId, doc, {
-                            awareness,
-                            peerId: createPeerId(),
-                            debug: debugConnections,
-                        }),
-                },
-            ],
-        });
-
-        if (debugConnections) {
-            provider.on("debug", (debug: unknown) => {
-                const detail = debug as { provider?: string; event?: { type?: string } };
-                if (detail.event?.type !== "peer-connect") return;
-                const diagnostics = (window as typeof window & {
-                    __connectionDiagnostics?: unknown[];
-                }).__connectionDiagnostics ??= [];
-                diagnostics.push({
-                    wallTime: Date.now(),
-                    monotonicTime: performance.now(),
-                    detail,
-                });
-                console.debug("[WebRTC]", detail);
+    if (debugConnections) {
+        provider.on("debug", (detail) => {
+            if ((detail.event as { type?: string }).type !== "peer-connect") return;
+            const diagnostics = (window as typeof window & {
+                __connectionDiagnostics?: unknown[];
+            }).__connectionDiagnostics ??= [];
+            diagnostics.push({
+                wallTime: Date.now(),
+                monotonicTime: performance.now(),
+                detail,
             });
-        }
-
-        const connectedPaths = new Map<string, Set<string>>();
-        const updateConnectionStatus = () => {
-            connectedProviderCount = [...connectedPaths.values()].filter(
-                (paths) => paths.size > 0,
-            ).length;
-            providerActive = connectedProviderCount > 0 || rtcPeerCount > 0;
-        };
-        provider.on("status", (status: unknown) => {
-            const { provider: providerName, event } = status as ConnectionStatusEvent;
-            const paths = connectedPaths.get(providerName) ?? new Set<string>();
-            const endpoint = event.relay ?? event.tracker ?? "default";
-            if (event.status === "connected") paths.add(endpoint);
-            else paths.delete(endpoint);
-            connectedPaths.set(providerName, paths);
-            updateConnectionStatus();
+            console.debug("[WebRTC]", detail);
         });
-        provider.on("connection-error", (error: unknown) => {
-            const { provider: providerName } = error as { provider: string };
-            console.warn(`${providerName} connection error`);
-        });
-
-        const awareness = provider.awareness;
-        awareness.setLocalState({ peerId });
-        awareness.on("change", (changes: Changes) => {
-            states = new Map(
-                [...awareness.getStates()].filter(([clientId]) => clientId !== ydoc!.clientID),
-            ) as Map<number, PeerState>;
-            rtcPeerCount = states.size;
-            providerSynced = rtcPeerCount > 0;
-            updateConnectionStatus();
-            for (const peerNumber of [...changes.added, ...changes.updated]) {
-                const peerLanguage = states.get(peerNumber)?.language;
-                if (peerLanguage && peerLanguage !== currentLanguage) {
-                    currentLanguage = peerLanguage;
-                    monaco.editor.setModelLanguage(model, currentLanguage);
-                    awareness.setLocalStateField("language", currentLanguage);
-                }
-            }
-        });
-        awareness.setLocalStateField("user", { name });
-        new MonacoBinding(
-            type,
-            model,
-            new Set([editor]),
-            awareness as unknown as Awareness,
-        );
-
-        new IndexeddbPersistence(roomId, ydoc);
-
-        if (window.matchMedia("(prefers-color-scheme: dark)").matches) monaco.editor.setTheme("vs-dark");
-
-        if (disposed) return;
-
-        availableLanguages = [];
-        for (const lang of monaco.languages.getLanguages()) {
-            if (!lang.aliases) continue;
-            availableLanguages.push([lang.id, lang.aliases[0]]);
-        }
     }
 
-    initialize();
+    provider.on("status", ({ provider: providerName, event }) => {
+        const { status, relay, tracker } = event as TransportStatus;
+        const endpoint = `${providerName}:${relay ?? tracker}`;
+        if (status === "connected") connectedEndpoints.set(endpoint, providerName);
+        else connectedEndpoints.delete(endpoint);
+    });
+    provider.on("connection-error", ({ provider: providerName }) => {
+        console.warn(`${providerName} connection error`);
+    });
 
-    const beforeUnload = () => destroyProvider();
+    const awareness = provider.awareness;
+    awareness.setLocalState({ peerId });
+    awareness.on("change", (changes: AwarenessChanges) => {
+        states = new Map(
+            [...awareness.getStates()].filter(([clientId]) => clientId !== awareness.clientID),
+        ) as Map<number, PeerState>;
+        for (const clientId of [...changes.added, ...changes.updated]) {
+            const peerLanguage = states.get(clientId)?.language;
+            if (peerLanguage && peerLanguage !== currentLanguage) setLanguage(peerLanguage);
+        }
+    });
+    awareness.setLocalStateField("user", { name });
+    new MonacoBinding(ydoc.getText("monaco"), model, new Set([editor]), awareness);
+
+    new IndexeddbPersistence(roomId, ydoc);
+
+    const beforeUnload = () => provider.destroy();
     window.addEventListener("beforeunload", beforeUnload);
 
     return () => {
-        disposed = true;
         window.removeEventListener("beforeunload", beforeUnload);
-        editorResizeObserver?.disconnect();
-        destroyProvider();
-        editor?.dispose();
-        ydoc?.destroy();
+        provider.destroy();
+        editor.dispose();
+        ydoc.destroy();
     };
 });
 </script>
@@ -232,7 +157,7 @@ onMount(() => {
             <h3 class="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-500">Language</h3>
             <select
                 bind:value={currentLanguage}
-                onchange={handleLanguageSelect}
+                onchange={() => setLanguage(currentLanguage)}
                 class="w-full max-w-full rounded-sm border border-neutral-700 bg-neutral-900 px-2 py-1.5 text-sm text-neutral-100 outline-none focus:border-blue-500"
             >
                 {#each availableLanguages as [langId, langAlias]}
@@ -285,10 +210,10 @@ onMount(() => {
                 </dd>
 
                 <dt class="text-neutral-600">sync</dt>
-                <dd class="text-neutral-300">{providerSynced ? "synced" : "waiting"}</dd>
+                <dd class="text-neutral-300">{states.size > 0 ? "synced" : "waiting"}</dd>
 
                 <dt class="text-neutral-600">peers</dt>
-                <dd class="text-neutral-300">{rtcPeerCount} rtc</dd>
+                <dd class="text-neutral-300">{states.size} rtc</dd>
 
                 <dt class="text-neutral-600">transports</dt>
                 <dd class="text-neutral-300">Nostr + WebTorrent</dd>

@@ -16,36 +16,24 @@
         "test:cross-network": "node e2e/cross-network/run.mjs"
     },
     "devDependencies": {
-        "@playwright/test": "^1.62.1",
-        "@sveltejs/vite-plugin-svelte": "^7.2.0",
-        "@tailwindcss/vite": "^4.3.2",
+        "@playwright/test": "^1.64.1",
+        "@sveltejs/vite-plugin-svelte": "^7.3.1",
+        "@tailwindcss/vite": "^4.3.3",
         "@typescript/native-preview": "^7.0.0-dev.20260707.2",
-        "monaco-editor": "^0.55.1",
-        "svelte": "^5.56.4",
-        "svelte-check-native": "^0.9.6",
-        "tailwindcss": "^4.3.2",
-        "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-        "vite-plus": "latest",
+        "monaco-editor": "^0.57.0",
+        "svelte": "^5.57.2",
+        "svelte-check-native": "^1.9.1",
+        "tailwindcss": "^4.3.3",
+        "vite-plus": "^1.2.0",
         "y-indexeddb": "^9.0.12",
         "y-monaco": "^0.1.6",
         "y-multiprovider": "git+https://github.com/woohp/y-multiprovider.git",
         "y-nostr": "git+https://github.com/woohp/y-nostr.git",
-        "y-protocols": "^1.0.7",
         "y-webtorrent": "git+https://github.com/woohp/y-webtorrent.git",
-        "yjs": "^13.6.31"
+        "yjs": "^13.6.33"
     },
     "overrides": {
-        "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-        "vitest": "npm:@voidzero-dev/vite-plus-test@latest"
+        "vite": "npm:@voidzero-dev/vite-plus-core@^1.2.0"
     },
-    "browserslist": [
-        "last 2 Chrome versions"
-    ],
-    "packageManager": "npm@11.12.1",
-    "allowScripts": {
-        "webrtc-data-peer@0.1.0": true,
-        "y-multiprovider@0.1.0": true,
-        "y-nostr@0.1.0": true,
-        "y-webtorrent@0.1.0": true
-    }
+    "packageManager": "npm@11.12.1"
 }

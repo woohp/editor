@@ -24,9 +24,10 @@ export default defineConfig({
         outDir: "../docs",
         emptyOutDir: true,
     },
-    plugins: [
-        svelte({ configFile: new URL("./svelte.config.js", import.meta.url).pathname }),
-        tailwindcss(),
-    ],
+    plugins: [svelte(), tailwindcss()],
+    resolve: {
+        // y-monaco deep-imports a path Monaco's exports map hides; same module as the main entry's
+        alias: { "monaco-editor/esm/vs/editor/editor.api.js": "monaco-editor/editor/editor.api" },
+    },
     root: "src",
 });

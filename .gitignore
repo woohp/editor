@@ -17,13 +17,8 @@ node_modules
 # Optional REPL history
 .node_repl_history
 
-# Cache for Parcel
-.cache
-
 # Apple stuff
 .DS_Store
-
-.parcel-cache
 
 playwright-report/
 test-results/

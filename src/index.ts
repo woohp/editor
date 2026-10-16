@@ -1,12 +1,10 @@
 import { mount } from "svelte";
-import App from "./App.svelte";
 import "./style.css";
-import EditorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import CssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
-import HtmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
-import JsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
-import TsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
-import { createPeerId } from "y-webtorrent";
+import EditorWorker from "monaco-editor/editor/editor.worker?worker";
+import CssWorker from "monaco-editor/languages/features/css/css.worker?worker";
+import HtmlWorker from "monaco-editor/languages/features/html/html.worker?worker";
+import JsonWorker from "monaco-editor/languages/features/json/json.worker?worker";
+import TsWorker from "monaco-editor/languages/features/typescript/ts.worker?worker";
 
 const peerIdStorageKey = "editor-peer-id";
 
@@ -17,39 +15,13 @@ function makeId(): string {
         .join("");
 }
 
-function encodePeerId(peerId: string): string {
-    return btoa(peerId);
-}
-
-function decodePeerId(value: string): string | null {
-    try {
-        const peerId = atob(value);
-        return peerId.length === 20 ? peerId : null;
-    } catch {
-        return null;
-    }
-}
-
 function getStablePeerId(): string {
     const cachedPeerId = sessionStorage.getItem(peerIdStorageKey);
-    if (cachedPeerId) {
-        const decodedPeerId = decodePeerId(cachedPeerId);
-        if (decodedPeerId) return decodedPeerId;
-    }
+    if (cachedPeerId) return cachedPeerId;
 
-    const peerId = createPeerId();
-    sessionStorage.setItem(peerIdStorageKey, encodePeerId(peerId));
+    const peerId = crypto.randomUUID();
+    sessionStorage.setItem(peerIdStorageKey, peerId);
     return peerId;
-}
-
-function peerIdLabel(peerId: string): string {
-    let label = "";
-    for (let index = 0; index < 4; index++) {
-        const code = peerId.charCodeAt(index);
-        if (Number.isNaN(code)) break;
-        label += code.toString(16).padStart(2, "0");
-    }
-    return label;
 }
 
 globalThis.MonacoEnvironment = {
@@ -71,7 +43,7 @@ globalThis.MonacoEnvironment = {
 };
 
 const peerId = getStablePeerId();
-console.info("peerId:", peerIdLabel(peerId));
+console.info("peerId:", peerId);
 
 async function main() {
     const urlParams = new URLSearchParams(window.location.search);
@@ -82,7 +54,7 @@ async function main() {
         newRoomEl.classList.remove("hidden");
         const newRoomLink = newRoomEl.querySelector("a");
         if (newRoomLink) {
-            newRoomLink.href = "?room=" + encodeURIComponent(makeId());
+            newRoomLink.href = `?room=${makeId()}`;
         }
         return;
     }
@@ -94,18 +66,14 @@ async function main() {
     const appEl = document.querySelector("#app") as HTMLDivElement;
     appEl.classList.remove("hidden");
 
-    const cachedName = localStorage.getItem("editor-name");
-    let name: string | null;
-    if (cachedName == null) {
-        name = prompt("Your name is...");
-    } else {
-        name = cachedName;
-    }
-    if (name == null || name === "") {
-        name = `Peer ${peerIdLabel(peerId)}`;
-    }
+    // prompt only when no name is stored; an empty answer falls back to a generated name
+    const name =
+        (localStorage.getItem("editor-name") ?? prompt("Your name is...")) ||
+        `Peer ${peerId.slice(0, 8)}`;
     localStorage.setItem("editor-name", name);
 
+    // App pulls in Monaco's core via y-monaco; keep it out of the landing-page bundle
+    const { default: App } = await import("./App.svelte");
     mount(App, {
         target: appEl,
         props: { roomId, name, peerId },
