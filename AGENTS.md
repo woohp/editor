@@ -17,7 +17,7 @@ There is no unit-test runner. After code changes run `format`, `check`, `lint`, 
 ## Boundaries
 
 - `npm run build` writes to `docs/`, which is committed and served by GitHub Pages from `master`. Rebuild and commit it with source changes; do not change the output directory or `base: "./"`.
-- `y-multiprovider`, `y-nostr`, `y-webtorrent`, and `webrtc-data-peer` are the owner's packages, installed from git. Fix transport, awareness, and discovery bugs there rather than working around them here. `y-nostr` and `y-webtorrent` pin `webrtc-data-peer` by commit, so a fix there also needs a bump in both.
+- `y-multiprovider`, `y-nostr`, `y-webtorrent`, and `webrtc-data-peer` are the owner's packages, installed from git. Fix transport, awareness, and discovery bugs there rather than working around them here. `y-nostr` and `y-webtorrent` pin `webrtc-data-peer` by commit, so a fix there also needs a bump in both. Keep their URLs `git+https://` in `package.json` and `package-lock.json`; a local `npm install` may rewrite the lockfile to `git+ssh://`, so revert that.
 - Do not add local type shims: an ambient `declare module` silently replaces a package's bundled types.
 
 ## Durable decisions
