@@ -72,6 +72,7 @@ async function main() {
         `Peer ${peerId.slice(0, 8)}`;
     localStorage.setItem("editor-name", name);
 
+    // App pulls in Monaco's core via y-monaco; keep it out of the landing-page bundle
     const { default: App } = await import("./App.svelte");
     mount(App, {
         target: appEl,

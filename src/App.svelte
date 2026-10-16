@@ -2,11 +2,10 @@
 import * as monaco from "monaco-editor";
 import { onMount } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
-import { MultiProvider } from "y-multiprovider";
+import { type AwarenessChanges, MultiProvider } from "y-multiprovider";
 import { NostrProvider } from "y-nostr";
 import { IndexeddbPersistence } from "y-indexeddb";
 import { MonacoBinding } from "y-monaco";
-import type { Awareness } from "y-protocols/awareness";
 import { WebtorrentProvider } from "y-webtorrent";
 import * as Y from "yjs";
 
@@ -15,13 +14,11 @@ interface PeerState {
     language?: string;
 }
 
-interface ConnectionStatusEvent {
-    provider: string;
-    event: {
-        status: string;
-        relay?: string;
-        tracker?: string;
-    };
+// nostr reports { status, relay }; webtorrent reports { status, tracker }
+interface TransportStatus {
+    status: string;
+    relay?: string;
+    tracker?: string;
 }
 
 interface Props {
@@ -77,7 +74,7 @@ onMount(() => {
     const ydoc = new Y.Doc();
     const debugConnections = localStorage.getItem("editor-webrtc-debug") === "1";
 
-    provider = new MultiProvider(roomId, ydoc, {
+    provider = new MultiProvider(ydoc, {
         providers: [
             {
                 name: "nostr",
@@ -96,9 +93,8 @@ onMount(() => {
     });
 
     if (debugConnections) {
-        provider.on("debug", (debug: unknown) => {
-            const detail = debug as { provider?: string; event?: { type?: string } };
-            if (detail.event?.type !== "peer-connect") return;
+        provider.on("debug", (detail) => {
+            if ((detail.event as { type?: string }).type !== "peer-connect") return;
             const diagnostics = (window as typeof window & {
                 __connectionDiagnostics?: unknown[];
             }).__connectionDiagnostics ??= [];
@@ -111,20 +107,19 @@ onMount(() => {
         });
     }
 
-    provider.on("status", (status: unknown) => {
-        const { provider: providerName, event } = status as ConnectionStatusEvent;
-        const endpoint = `${providerName}:${event.relay ?? event.tracker}`;
-        if (event.status === "connected") connectedEndpoints.set(endpoint, providerName);
+    provider.on("status", ({ provider: providerName, event }) => {
+        const { status, relay, tracker } = event as TransportStatus;
+        const endpoint = `${providerName}:${relay ?? tracker}`;
+        if (status === "connected") connectedEndpoints.set(endpoint, providerName);
         else connectedEndpoints.delete(endpoint);
     });
-    provider.on("connection-error", (error: unknown) => {
-        const { provider: providerName } = error as { provider: string };
+    provider.on("connection-error", ({ provider: providerName }) => {
         console.warn(`${providerName} connection error`);
     });
 
     const awareness = provider.awareness;
     awareness.setLocalState({ peerId });
-    awareness.on("change", (changes) => {
+    awareness.on("change", (changes: AwarenessChanges) => {
         states = new Map(
             [...awareness.getStates()].filter(([clientId]) => clientId !== awareness.clientID),
         ) as Map<number, PeerState>;
@@ -134,7 +129,7 @@ onMount(() => {
         }
     });
     awareness.setLocalStateField("user", { name });
-    new MonacoBinding(ydoc.getText("monaco"), model, new Set([editor]), awareness as unknown as Awareness);
+    new MonacoBinding(ydoc.getText("monaco"), model, new Set([editor]), awareness);
 
     new IndexeddbPersistence(roomId, ydoc);
 
